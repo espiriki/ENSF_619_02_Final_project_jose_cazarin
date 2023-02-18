@@ -208,6 +208,9 @@ def calculate_mean_std_train_dataset(stats_train_data, pipeline):
     return mean, std
 
 
+def count_parameters(model): return sum(p.numel() for p in model.parameters())
+
+
 if __name__ == '__main__':
     args = args_parser()
 
@@ -244,9 +247,19 @@ if __name__ == '__main__':
     global_model = EffNetB4(_num_classes, args.tl)
     input_size = eff_net_sizes["b4"]
     _batch_size = 32
-    if args.model == "b4":
+
+    if args.model == "b0":
+        global_model = EffNetB0(_num_classes, args.tl)
+        input_size = eff_net_sizes[args.model]
+        _batch_size = 40
+    elif args.model == "b4":
         global_model = EffNetB4(_num_classes, args.tl)
         input_size = eff_net_sizes[args.model]
+        _batch_size = 32
+    elif args.model == "b7":
+        global_model = EffNetB7(_num_classes, args.tl)
+        input_size = eff_net_sizes[args.model]
+        _batch_size = 6
     elif args.model == "eff_v2_small":
         global_model = EffNetV2_S(_num_classes, args.tl)
         input_size = eff_net_sizes[args.model]
@@ -254,42 +267,35 @@ if __name__ == '__main__':
     elif args.model == "eff_v2_medium":
         global_model = EffNetV2_M(_num_classes, args.tl)
         input_size = eff_net_sizes[args.model]
+        _batch_size = 32
     elif args.model == "eff_v2_large":
         global_model = EffNetV2_L(_num_classes, args.tl)
         input_size = eff_net_sizes[args.model]
         _batch_size = 8
-    elif args.model == "b5":
-        global_model = EffNetB5(_num_classes, args.tl)
-        input_size = eff_net_sizes[args.model]
-    elif args.model == "b7":
-        global_model = EffNetB7(_num_classes, args.tl)
-        input_size = eff_net_sizes[args.model]
-        _batch_size = 6
-    elif args.model == "b0":
-        global_model = EffNetB0(_num_classes, args.tl)
-        input_size = eff_net_sizes[args.model]
-        _batch_size = 40
     elif args.model == "res18":
         global_model = ResNet18(_num_classes, args.tl)
         input_size = (300, 300)
+        _batch_size = 256
     elif args.model == "res50":
         global_model = ResNet50(_num_classes, args.tl)
         input_size = (400, 400)
+        _batch_size = 96
     elif args.model == "res152":
         global_model = ResNet152(_num_classes, args.tl)
         input_size = (500, 500)
-    elif args.model == "next_tiny":
-        global_model = ConvNextTiny(_num_classes, args.tl)
-        input_size = (224, 224)
+        _batch_size = 32
     elif args.model == "mb":
         global_model = MBNetLarge(_num_classes, args.tl)
         input_size = (320, 320)
-    elif args.model == "vision":
-        global_model = VisionLarge32(_num_classes, args.tl)
+        _batch_size = 256
+    elif args.model == "convnext":
+        global_model = ConvNextBase(_num_classes, args.tl)
         input_size = (224, 224)
-    elif args.model == "visionb":
-        global_model = VisionB32(_num_classes, args.tl)
+        _batch_size = 256
+    elif args.model == "transformer":
+        global_model = VisionB16(_num_classes, args.tl)
         input_size = (224, 224)
+        _batch_size = 256
     else:
         print("Invalid Model: {}".format(args.model))
         sys.exit(1)
@@ -298,6 +304,7 @@ if __name__ == '__main__':
     print("Learning Rate: {}".format(args.lr))
     print("Training for {} epochs".format(args.epochs))
     print("Use class weights: {}".format(args.balance_weights))
+    print("Num total parameters: {}".format(count_parameters(global_model)))
     if args.tl is True:
         print("Training for {} fine tuning epochs".format(args.ft_epochs))
         print("Fraction of the LR for fine tuning: {}".format(args.fraction_lr))
@@ -421,14 +428,13 @@ if __name__ == '__main__':
         a_pytorch.transforms.ToTensorV2()
     ])
 
+    _num_workers = 32
+
     train_data = CustomImageFolder(root=None, custom_samples=train_data,
                                    transform=Transforms(img_transf=TRAIN_PIPELINE))
 
     val_data = CustomImageFolder(root=None, custom_samples=val_data,
                                  transform=Transforms(img_transf=VALIDATION_PIPELINE))
-
-    # cluster says the recommended ammount is 8
-    _num_workers = 16
 
     data_loader_train = torch.utils.data.DataLoader(dataset=train_data,
                                                     batch_size=_batch_size,

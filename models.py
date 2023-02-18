@@ -197,14 +197,14 @@ def ResNet152(num_classes=4, transfer_learning=False):
     return model
 
 
-def ConvNextTiny(num_classes=4, transfer_learning=False):
+def ConvNextBase(num_classes=4, transfer_learning=False):
 
     if transfer_learning:
         _weights = 'IMAGENET1K_V1'
     else:
         _weights = None
 
-    model = convnext_tiny(weights=_weights)
+    model = convnext_base(weights=_weights)
 
     if transfer_learning:
         for param in model.parameters():
@@ -254,7 +254,7 @@ def VisionLarge32(num_classes=4, transfer_learning=False):
     return model
 
 
-def VisionB32(num_classes=4, transfer_learning=False):
+def VisionB16(num_classes=4, transfer_learning=False):
 
     if transfer_learning:
         _weights = 'IMAGENET1K_V1'
