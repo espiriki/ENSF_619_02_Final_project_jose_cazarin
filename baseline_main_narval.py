@@ -300,16 +300,17 @@ if __name__ == '__main__':
         print("Invalid Model: {}".format(args.model))
         sys.exit(1)
 
+    print("Num total parameters of the model: {}".format(
+        count_parameters(global_model)))
     print("Batch Size: {}".format(_batch_size))
     print("Learning Rate: {}".format(args.lr))
+    print("Regularization Rate: {}".format(args.reg))
+    print("Using class weights: {}\n".format(args.balance_weights))
+
     print("Training for {} epochs".format(args.epochs))
-    print("Use class weights: {}".format(args.balance_weights))
-    print("Num total parameters: {}".format(count_parameters(global_model)))
     if args.tl is True:
         print("Training for {} fine tuning epochs".format(args.ft_epochs))
         print("Fraction of the LR for fine tuning: {}".format(args.fraction_lr))
-
-    print("Regularization Rate: {}".format(args.reg))
 
     print(global_model)
 
