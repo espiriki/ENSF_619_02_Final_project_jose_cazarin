@@ -19,6 +19,12 @@ import numpy as np
 import torch.nn as nn
 import keep_aspect_ratio
 from torchmetrics.classification import ConfusionMatrix
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sn
+from matplotlib.colors import LinearSegmentedColormap
+
+_num_classes = 4
 
 
 class Transforms:
@@ -47,8 +53,7 @@ BASE_PATH = "/project/def-rmsouza/jocazar/"
 
 TEST_DATA_PATH = BASE_PATH + "test_dataset_fixed_resized_v2"
 
-
-def calculate_test_accuracy(model, data_loader, len_test_data, hw_device, batch_size):
+def calculate_test_accuracy(model, data_loader, len_test_data, hw_device, batch_size, args):
 
     correct = 0
     n_batches = math.ceil((len_test_data/batch_size))
@@ -85,7 +90,18 @@ def calculate_test_accuracy(model, data_loader, len_test_data, hw_device, batch_
     all_preds = [item for sublist in all_preds for item in sublist]
     all_labels = [item for sublist in all_labels for item in sublist]
 
-    print(confmat(torch.tensor(all_labels), torch.tensor(all_preds)))
+    conf_matrix = confmat(torch.tensor(all_labels), torch.tensor(all_preds))
+    print(conf_matrix)
+
+    classes = ["black", "blue", "green", "ttr"]
+
+    df_cm = pd.DataFrame(conf_matrix, index=classes,
+                         columns=classes)
+    plt.figure(figsize=(10, 5))
+    sn.heatmap(df_cm, annot=True, cmap='viridis', fmt='g')
+    plt.savefig(BASE_PATH + 'conf_matrix_model_{}_class_weights_{}.png'.format(
+        args.model, args.balance_weights))
+
     return test_acc
 
 
@@ -103,69 +119,59 @@ if __name__ == '__main__':
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    if args.model == "b4":
-        global_model = EffNetB4()
+    if args.model == "b0":
+        global_model = EffNetB0(_num_classes, args.tl)
+        input_size = eff_net_sizes[args.model]
+        _batch_size = 40
+    elif args.model == "b4":
+        global_model = EffNetB4(_num_classes, args.tl)
         input_size = eff_net_sizes[args.model]
         _batch_size = 32
     elif args.model == "eff_v2_small":
-        global_model = EffNetV2_S(4, args.tl)
+        global_model = EffNetV2_S(_num_classes, args.tl)
         input_size = eff_net_sizes[args.model]
         _batch_size = 48
     elif args.model == "eff_v2_medium":
-        global_model = EffNetV2_M(4, args.tl)
+        global_model = EffNetV2_M(_num_classes, args.tl)
         input_size = eff_net_sizes[args.model]
+        _batch_size = 32
     elif args.model == "eff_v2_large":
-        global_model = EffNetV2_L(4, args.tl)
+        global_model = EffNetV2_L(_num_classes, args.tl)
         input_size = eff_net_sizes[args.model]
-    elif args.model == "b5":
-        global_model = EffNetB5()
-        input_size = eff_net_sizes[args.model]
-        _batch_size = 16
-    elif args.model == "b7":
         _batch_size = 8
-        global_model = EffNetB7()
-        input_size = eff_net_sizes[args.model]
-    elif args.model == "b0":
-        global_model = EffNetB0()
-        input_size = eff_net_sizes[args.model]
-        _batch_size = 40
     elif args.model == "res18":
-        global_model = ResNet18()
+        global_model = ResNet18(_num_classes, args.tl)
         input_size = (300, 300)
+        _batch_size = 256
     elif args.model == "res50":
-        global_model = ResNet50()
+        global_model = ResNet50(_num_classes, args.tl)
         input_size = (400, 400)
+        _batch_size = 96
     elif args.model == "res152":
-        global_model = ResNet152()
+        global_model = ResNet152(_num_classes, args.tl)
         input_size = (500, 500)
-    elif args.model == "next_tiny":
-        global_model = ConvNextTiny()
-        input_size = (224, 224)
+        _batch_size = 32
     elif args.model == "mb":
-        global_model = MBNetLarge()
+        global_model = MBNetLarge(_num_classes, args.tl)
         input_size = (320, 320)
-    elif args.model == "vision":
-        global_model = VisionLarge32()
+        _batch_size = 256
+    elif args.model == "convnext":
+        global_model = ConvNextBase(_num_classes, args.tl)
         input_size = (224, 224)
-    elif args.model == "visionb":
-        global_model = VisionB32()
+        _batch_size = 256
+    elif args.model == "transformer":
+        global_model = VisionB16(_num_classes, args.tl)
         input_size = (224, 224)
+        _batch_size = 256
     else:
         print("Invalid Model: {}".format(args.model))
         sys.exit(1)
 
     print("Model: {}".format(args.model))
 
-    # global_model = nn.DataParallel(global_model)
-
     model_name = args.model_path
 
-    try:
-
-        global_model.load_state_dict(torch.load(
-            BASE_PATH + model_name))
-    except:
-        print("not correct model")
+    global_model.load_state_dict(torch.load(model_name))
 
     global_model.eval()
 
@@ -193,10 +199,7 @@ if __name__ == '__main__':
 
     print("Num of test images: {}".format(len(test_data)))
 
-    # cluster says the recommended ammount is 8
     _num_workers = 8
-
-    _batch_size = 32
 
     data_loader_test = torch.utils.data.DataLoader(dataset=test_data,
                                                    batch_size=_batch_size,
@@ -206,7 +209,7 @@ if __name__ == '__main__':
                                             data_loader_test,
                                             len(test_data),
                                             device,
-                                            _batch_size)
+                                            _batch_size, args)
 
     print(test_data.class_to_idx)
     print("Test accuracy: {:.2f} %".format(test_accuracy))

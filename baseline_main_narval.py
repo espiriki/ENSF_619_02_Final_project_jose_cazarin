@@ -256,10 +256,6 @@ if __name__ == '__main__':
         global_model = EffNetB4(_num_classes, args.tl)
         input_size = eff_net_sizes[args.model]
         _batch_size = 32
-    elif args.model == "b7":
-        global_model = EffNetB7(_num_classes, args.tl)
-        input_size = eff_net_sizes[args.model]
-        _batch_size = 6
     elif args.model == "eff_v2_small":
         global_model = EffNetV2_S(_num_classes, args.tl)
         input_size = eff_net_sizes[args.model]
@@ -267,7 +263,7 @@ if __name__ == '__main__':
     elif args.model == "eff_v2_medium":
         global_model = EffNetV2_M(_num_classes, args.tl)
         input_size = eff_net_sizes[args.model]
-        _batch_size = 32
+        _batch_size = 24
     elif args.model == "eff_v2_large":
         global_model = EffNetV2_L(_num_classes, args.tl)
         input_size = eff_net_sizes[args.model]
