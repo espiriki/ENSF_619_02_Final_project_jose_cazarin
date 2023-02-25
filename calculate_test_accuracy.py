@@ -53,6 +53,7 @@ BASE_PATH = "/project/def-rmsouza/jocazar/"
 
 TEST_DATA_PATH = BASE_PATH + "test_dataset_fixed_resized_v2"
 
+
 def calculate_test_accuracy(model, data_loader, len_test_data, hw_device, batch_size, args):
 
     correct = 0
@@ -204,6 +205,12 @@ if __name__ == '__main__':
     data_loader_test = torch.utils.data.DataLoader(dataset=test_data,
                                                    batch_size=_batch_size,
                                                    shuffle=True, num_workers=_num_workers, pin_memory=True)
+
+    if "true" in args.model_path or "True" in args.model_path:
+        args.balance_weights = True
+
+    if "false" in args.model_path or "False" in args.model_path:
+        args.balance_weights = False
 
     test_accuracy = calculate_test_accuracy(global_model,
                                             data_loader_test,

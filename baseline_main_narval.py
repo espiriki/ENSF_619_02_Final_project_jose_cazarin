@@ -287,11 +287,11 @@ if __name__ == '__main__':
     elif args.model == "convnext":
         global_model = ConvNextBase(_num_classes, args.tl)
         input_size = (224, 224)
-        _batch_size = 256
+        _batch_size = 128
     elif args.model == "transformer":
         global_model = VisionB16(_num_classes, args.tl)
         input_size = (224, 224)
-        _batch_size = 256
+        _batch_size = 128
     else:
         print("Invalid Model: {}".format(args.model))
         sys.exit(1)
