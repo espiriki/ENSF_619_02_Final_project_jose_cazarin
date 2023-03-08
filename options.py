@@ -27,5 +27,11 @@ def args_parser():
     parser.add_argument('--model_path', type=str, default="",
                         help='Model to test')
 
+    parser.add_argument('--acc_steps', type=int, default=0,
+                        help='Gradient accumulation steps')
+
+    parser.add_argument('--opt', type=str, default="adamw",
+                        help='Optimizer to use')
+
     args = parser.parse_args()
     return args

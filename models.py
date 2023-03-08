@@ -5,6 +5,7 @@
 from torchvision.models import *
 import torch.nn as nn
 
+
 def EffNetV2_L(num_classes=4, transfer_learning=False):
 
     if transfer_learning:
@@ -23,6 +24,7 @@ def EffNetV2_L(num_classes=4, transfer_learning=False):
                                     out_features=num_classes)
 
     return model
+
 
 def EffNetV2_M(num_classes=4, transfer_learning=False):
 
@@ -62,6 +64,7 @@ def EffNetV2_S(num_classes=4, transfer_learning=False):
                                     out_features=num_classes)
 
     return model
+
 
 def EffNetB4(num_classes=4, transfer_learning=False):
 
@@ -119,6 +122,7 @@ def EffNetB0(num_classes=4, transfer_learning=False):
     model.classifier[1] = nn.Linear(in_features=_in_features,
                                     out_features=num_classes)
     return model
+
 
 def ResNet18(num_classes=4, transfer_learning=False):
 
@@ -213,6 +217,7 @@ def MBNetLarge(num_classes=4, transfer_learning=False):
     model.classifier[3] = nn.Linear(in_features=_in_features,
                                     out_features=num_classes)
     return model
+
 
 def VisionB16(num_classes=4, transfer_learning=False):
 
