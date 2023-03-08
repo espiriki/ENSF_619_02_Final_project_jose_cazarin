@@ -57,7 +57,7 @@ TRAIN_DATA_PATH = BASE_PATH + "dataset_winter_2023_resized"
 
 
 def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
-                  batch_size, train_optimizer, weights, use_class_weights):
+                  batch_size, train_optimizer, weights, use_class_weights, acc_steps):
 
     batch_loss = []
     n_batches = math.ceil((len_train_data/batch_size))
@@ -74,13 +74,17 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
 
         images, labels = images.to(hw_device), labels.to(hw_device)
 
-        train_optimizer.zero_grad()
-
         model_outputs = model(images)
         loss = criterion(model_outputs, labels)
 
         loss.backward()
-        train_optimizer.step()
+
+        if ((batch_idx + 1) % acc_steps == 0) or \
+                (batch_idx + 1 == len(data_loader)) or acc_steps == 0:
+            # Update Optimizer
+            print("Optimizer step on batch idx: {}".format(batch_idx))
+            train_optimizer.step()
+            train_optimizer.zero_grad()
 
         print("Batches {}/{} on epoch {}".format(batch_idx,
                                                  n_batches, epoch_num), end='\r')
@@ -264,10 +268,12 @@ if __name__ == '__main__':
         global_model = EffNetV2_M(_num_classes, args.tl)
         input_size = eff_net_sizes[args.model]
         _batch_size = 24
+        args.acc_steps = 12
     elif args.model == "eff_v2_large":
         global_model = EffNetV2_L(_num_classes, args.tl)
         input_size = eff_net_sizes[args.model]
         _batch_size = 8
+        args.acc_steps = 36
     elif args.model == "res18":
         global_model = ResNet18(_num_classes, args.tl)
         input_size = (300, 300)
@@ -302,6 +308,8 @@ if __name__ == '__main__':
     print("Learning Rate: {}".format(args.lr))
     print("Regularization Rate: {}".format(args.reg))
     print("Using class weights: {}\n".format(args.balance_weights))
+    print("Optimizer: {}\n".format(args.opt))
+    print("Grad Acc steps: {}\n".format(args.acc_steps))
 
     print("Training for {} epochs".format(args.epochs))
     if args.tl is True:
@@ -445,8 +453,15 @@ if __name__ == '__main__':
     train_accuracy_history = []
     val_accuracy_history = []
 
-    optimizer = torch.optim.AdamW(
-        global_model.parameters(), lr=args.lr, weight_decay=args.reg)
+    if args.opt == "adamw":
+        optimizer = torch.optim.AdamW(
+            global_model.parameters(), lr=args.lr, weight_decay=args.reg)
+    elif args.opt == "sgd":
+        optimizer = torch.optim.SGD(
+            global_model.parameters(), lr=args.lr, weight_decay=args.reg)
+    else:
+        print("Invalid optimizer!")
+        sys.exit(1)
 
     print("Starting training...")
     global_model.to(device)
@@ -466,7 +481,8 @@ if __name__ == '__main__':
                                                           _batch_size,
                                                           optimizer,
                                                           class_weights,
-                                                          args.balance_weights)
+                                                          args.balance_weights,
+                                                          args.acc_steps)
 
         elapsed_time = time.time() - st
         print('Epoch time: {:.1f}'.format(elapsed_time))
@@ -517,8 +533,8 @@ if __name__ == '__main__':
             max_val_accuracy = val_accuracy
             best_epoch = epoch
         else:
-            print("Not saving model, best Val Acc so far on epoch {}: {:.3f}".format(best_epoch,
-                                                                                     max_val_accuracy))
+            print("Not saving model on epoch {}, best Val Acc so far on epoch {}: {:.3f}".format(epoch, best_epoch,
+                                                                                                 max_val_accuracy))
 
     print("Starting Fine tuning!!")
     # Fine tuning loop
@@ -545,7 +561,8 @@ if __name__ == '__main__':
                                                                     _batch_size,
                                                                     optimizer,
                                                                     class_weights,
-                                                                    args.balance_weights)
+                                                                    args.balance_weights,
+                                                                    args.acc_steps)
             elapsed_time = time.time() - st
             print('Fine Tuning: epoch time: {:.1f}'.format(elapsed_time))
 

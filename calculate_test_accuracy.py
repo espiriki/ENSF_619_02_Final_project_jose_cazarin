@@ -98,6 +98,8 @@ def calculate_test_accuracy(model, data_loader, len_test_data, hw_device, batch_
 
     df_cm = pd.DataFrame(conf_matrix, index=classes,
                          columns=classes)
+
+    plt.rcParams.update({'font.size': 16})
     plt.figure(figsize=(10, 5))
     sn.heatmap(df_cm, annot=True, cmap='viridis', fmt='g')
     plt.savefig(BASE_PATH + 'conf_matrix_model_{}_class_weights_{}.png'.format(
