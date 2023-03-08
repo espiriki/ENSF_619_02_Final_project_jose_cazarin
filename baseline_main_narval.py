@@ -307,9 +307,9 @@ if __name__ == '__main__':
     print("Batch Size: {}".format(_batch_size))
     print("Learning Rate: {}".format(args.lr))
     print("Regularization Rate: {}".format(args.reg))
-    print("Using class weights: {}\n".format(args.balance_weights))
-    print("Optimizer: {}\n".format(args.opt))
-    print("Grad Acc steps: {}\n".format(args.acc_steps))
+    print("Using class weights: {}".format(args.balance_weights))
+    print("Optimizer: {}".format(args.opt))
+    print("Grad Acc steps: {}".format(args.acc_steps))
 
     print("Training for {} epochs".format(args.epochs))
     if args.tl is True:
