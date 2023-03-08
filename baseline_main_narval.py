@@ -457,7 +457,8 @@ if __name__ == '__main__':
         optimizer = torch.optim.AdamW(
             global_model.parameters(), lr=args.lr, weight_decay=args.reg)
     elif args.opt == "sgd":
-        optimizer = torch.optim.SGD(global_model.parameters(), lr=args.lr, weight_decay=args.reg)
+        optimizer = torch.optim.SGD(
+            global_model.parameters(), lr=args.lr, weight_decay=args.reg)
     else:
         print("Invalid optimizer!")
         sys.exit(1)
