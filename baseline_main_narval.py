@@ -78,6 +78,8 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
         loss = criterion(model_outputs, labels)
 
         loss.backward()
+        if acc_steps != 0:
+            loss = loss / acc_steps
 
         if ((batch_idx + 1) % acc_steps == 0) or \
                 (batch_idx + 1 == len(data_loader)) or acc_steps == 0:
@@ -331,13 +333,13 @@ if __name__ == '__main__':
     STATS_PIPELINE = A.Compose([
         A.Resize(width=WIDTH,
                  height=HEIGHT,
-                 interpolation=cv2.INTER_CUBIC),
+                 interpolation=cv2.INTER_LINEAR),
         a_pytorch.transforms.ToTensorV2()
     ])
 
     all_data_img_folder = CustomImageFolder(root=TRAIN_DATA_PATH)
 
-    print("Total num of images: {}".format(len(all_data_img_folder)))
+    print(f"Total num of images: {len(all_data_img_folder)}")
     for i in range(_num_classes):
         len_samples = len(all_data_img_folder.per_class[i])
         print("Num of samples for class {}: {}. Percentage of dataset: {:.2f}".format(
@@ -400,13 +402,13 @@ if __name__ == '__main__':
                                       std=std_train_dataset, always_apply=True)
 
     TRAIN_PIPELINE = A.Compose([
-        A.Rotate(p=prob_augmentations, interpolation=cv2.INTER_CUBIC,
+        A.Rotate(p=prob_augmentations, interpolation=cv2.INTER_LINEAR,
                  border_mode=cv2.BORDER_CONSTANT,
                  value=0, crop_border=True),
         keep_aspect_ratio.PadToMaintainAR(aspect_ratio=AR_INPUT),
         A.Resize(width=WIDTH,
                  height=HEIGHT,
-                 interpolation=cv2.INTER_CUBIC),
+                 interpolation=cv2.INTER_LINEAR),
         A.VerticalFlip(p=prob_augmentations),
         A.HorizontalFlip(p=prob_augmentations),
         A.RandomBrightnessContrast(p=prob_augmentations),
@@ -416,7 +418,7 @@ if __name__ == '__main__':
                       pad_val=0),
         # Using this transform just to zoom in an out
         A.ShiftScaleRotate(shift_limit=0, rotate_limit=0,
-                           interpolation=cv2.INTER_CUBIC,
+                           interpolation=cv2.INTER_LINEAR,
                            border_mode=cv2.BORDER_CONSTANT,
                            value=0, p=prob_augmentations,
                            scale_limit=0.3),
@@ -428,7 +430,7 @@ if __name__ == '__main__':
         keep_aspect_ratio.PadToMaintainAR(aspect_ratio=AR_INPUT),
         A.Resize(width=WIDTH,
                  height=HEIGHT,
-                 interpolation=cv2.INTER_CUBIC),
+                 interpolation=cv2.INTER_LINEAR),
         normalize_transform,
         a_pytorch.transforms.ToTensorV2()
     ])
