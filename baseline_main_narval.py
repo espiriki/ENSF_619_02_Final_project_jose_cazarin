@@ -386,12 +386,16 @@ if __name__ == '__main__':
         print("Num of validation samples for class {}: {}. Percentage of dataset: {:.2f}".format(
             i, len_samples, (len_samples/len(val_data))*100))
 
-    # print("Calculating Train Dataset statistics...")
-    # mean_train_dataset, std_train_dataset = calculate_mean_std_train_dataset(
-    #     train_data, STATS_PIPELINE)
-
-    mean_train_dataset = [0.5558, 0.5318, 0.5029]
-    std_train_dataset = [0.0315, 0.0318, 0.0315]
+    mean_train_dataset = []
+    std_train_dataset = []
+    if args.calculate_dataset_stats is True:
+        print("Calculating Train Dataset statistics...")
+        mean_train_dataset, std_train_dataset = calculate_mean_std_train_dataset(
+            train_data, STATS_PIPELINE)
+    else:
+        # Already calculated in another run
+        mean_train_dataset = [0.5558, 0.5318, 0.5029]
+        std_train_dataset = [0.0315, 0.0318, 0.0315]
 
     print("Mean Train Dataset: {}, STD Train Dataset: {}".format(
         mean_train_dataset, std_train_dataset))

@@ -33,5 +33,8 @@ def args_parser():
     parser.add_argument('--opt', type=str, default="adamw",
                         help='Optimizer to use')
 
+    parser.add_argument('--calculate_dataset_stats',
+                        action=argparse.BooleanOptionalAction, default=False)
+
     args = parser.parse_args()
     return args
