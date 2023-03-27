@@ -81,10 +81,13 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
         if acc_steps != 0:
             loss = loss / acc_steps
 
-        if ((batch_idx + 1) % acc_steps == 0) or \
-                (batch_idx + 1 == len(data_loader)) or acc_steps == 0:
-            # Update Optimizer
-            print("Optimizer step on batch idx: {}".format(batch_idx))
+            if ((batch_idx + 1) % acc_steps == 0) or \
+                    (batch_idx + 1 == len(data_loader)) or acc_steps == 0:
+                # Update Optimizer
+                print("Optimizer step on batch idx: {}".format(batch_idx))
+                train_optimizer.step()
+                train_optimizer.zero_grad()
+        else:
             train_optimizer.step()
             train_optimizer.zero_grad()
 
