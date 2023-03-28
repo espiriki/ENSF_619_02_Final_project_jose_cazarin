@@ -51,7 +51,7 @@ eff_net_sizes = {
     'eff_v2_large': (480, 480)
 }
 
-BASE_PATH = "/project/def-rmsouza/jocazar/"
+BASE_PATH = "./"
 
 TRAIN_DATA_PATH = BASE_PATH + "dataset_winter_2023_resized"
 
