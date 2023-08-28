@@ -22,7 +22,7 @@ import numpy as np
 import torch.nn as nn
 import itertools
 import time
-from CustomImageFolder import CustomImageFolder
+from CVPR_code.CustomImageTextFolder import *
 from torchmetrics.classification import ConfusionMatrix
 import ssl
 
@@ -51,7 +51,7 @@ eff_net_sizes = {
     'eff_v2_large': (480, 480)
 }
 
-BASE_PATH = "./"
+BASE_PATH = "../"
 
 TRAIN_DATA_PATH = BASE_PATH + "dataset_winter_2023_resized"
 
@@ -70,7 +70,8 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
         criterion = torch.nn.CrossEntropyLoss().to(hw_device)
 
     print("Using device: {}".format(hw_device))
-    for batch_idx, (images, labels) in enumerate(data_loader):
+    for batch_idx, (data, labels) in enumerate(data_loader):
+        images = data['image']['raw_image']
 
         images, labels = images.to(hw_device), labels.to(hw_device)
 
@@ -97,52 +98,29 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
         cpu_loss = loss.cpu()
         cpu_loss = cpu_loss.detach()
         batch_loss.append(cpu_loss)
+        break
 
     print("\n")
 
     return n_batches, batch_loss
 
 
-def calculate_train_accuracy(model, data_loader, len_train_data, hw_device, batch_size):
+def calculate_set_accuracy(
+        model,
+        data_loader,
+        len_data,
+        device,
+        batch_size):
 
-    correct = 0
-    n_batches = math.ceil((len_train_data/batch_size))
+    n_batches = math.ceil((len_data/batch_size))
 
     with torch.no_grad():
 
-        for batch_idx, (images, labels) in enumerate(data_loader):
-
-            images, labels = images.to(hw_device), labels.to(hw_device)
-
-            # Inference
-            outputs = model(images)
-
-            # Prediction
-            _, pred_labels = torch.max(outputs, 1)
-            pred_labels = pred_labels.view(-1)
-            correct += torch.sum(torch.eq(pred_labels, labels)).item()
-
-            print("Batches {}/{} ".format(batch_idx,
-                                          n_batches), end='\r')
-
-    print("\n")
-    train_acc = 100 * (correct/len_train_data)
-    return train_acc
-
-
-def calculate_val_accuracy(model, data_loader, len_val_data, hw_device, batch_size):
-
-    correct = 0
-    n_batches = math.ceil((len_val_data/batch_size))
-
-    all_preds = []
-    all_labels = []
-    confmat = ConfusionMatrix(task="multiclass", num_classes=_num_classes)
-    with torch.no_grad():
-
-        for batch_idx, (images, labels) in enumerate(data_loader):
-
-            images, labels = images.to(hw_device), labels.to(hw_device)
+        correct = 0
+        for batch_idx, (data, labels) in enumerate(data_loader):
+            images = data['image']['raw_image']
+            images, labels = images.to(
+                device), labels.to(device)
 
             # Inference
             outputs = model(images)
@@ -151,20 +129,14 @@ def calculate_val_accuracy(model, data_loader, len_val_data, hw_device, batch_si
             _, pred_labels = torch.max(outputs, 1)
             pred_labels = pred_labels.view(-1)
 
-            all_preds.append(pred_labels)
-            all_labels.append(labels)
-
             correct += torch.sum(torch.eq(pred_labels, labels)).item()
 
             print("Batches {}/{} ".format(batch_idx,
                                           n_batches), end='\r')
 
-    all_preds = [item for sublist in all_preds for item in sublist]
-    all_labels = [item for sublist in all_labels for item in sublist]
-    print(confmat(torch.tensor(all_labels), torch.tensor(all_preds)))
-
-    val_acc = 100 * (correct/len_val_data)
-    return val_acc
+        acc = 100 * (correct/len_data)
+        print("Set acc: ", acc)
+        return acc
 
 
 def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tuning, class_weights):
@@ -194,8 +166,8 @@ def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tu
 
 def calculate_mean_std_train_dataset(stats_train_data, pipeline):
 
-    stats_train_data = CustomImageFolder(root=None, custom_samples=stats_train_data,
-                                         transform=Transforms(img_transf=pipeline))
+    stats_train_data = CustomImageTextFolder(root=None, custom_samples=stats_train_data,
+                                             transform=Transforms(img_transf=pipeline))
 
     stats_loader = torch.utils.data.DataLoader(dataset=stats_train_data,
                                                batch_size=32,
@@ -321,8 +293,6 @@ if __name__ == '__main__':
         print("Training for {} fine tuning epochs".format(args.ft_epochs))
         print("Fraction of the LR for fine tuning: {}".format(args.fraction_lr))
 
-    print(global_model)
-
     # wandb.watch(global_model)
 
     if torch.cuda.device_count() > 1:
@@ -340,7 +310,8 @@ if __name__ == '__main__':
         a_pytorch.transforms.ToTensorV2()
     ])
 
-    all_data_img_folder = CustomImageFolder(root=TRAIN_DATA_PATH)
+    all_data_img_folder = CustomImageTextFolder(
+        root=TRAIN_DATA_PATH)
 
     print(f"Total num of images: {len(all_data_img_folder)}")
     for i in range(_num_classes):
@@ -444,11 +415,11 @@ if __name__ == '__main__':
 
     _num_workers = 32
 
-    train_data = CustomImageFolder(root=None, custom_samples=train_data,
-                                   transform=Transforms(img_transf=TRAIN_PIPELINE))
+    train_data = CustomImageTextFolder(root=None, custom_samples=train_data,
+                                       transform=Transforms(img_transf=TRAIN_PIPELINE))
 
-    val_data = CustomImageFolder(root=None, custom_samples=val_data,
-                                 transform=Transforms(img_transf=VALIDATION_PIPELINE))
+    val_data = CustomImageTextFolder(root=None, custom_samples=val_data,
+                                     transform=Transforms(img_transf=VALIDATION_PIPELINE))
 
     data_loader_train = torch.utils.data.DataLoader(dataset=train_data,
                                                     batch_size=_batch_size,
@@ -510,11 +481,11 @@ if __name__ == '__main__':
         global_model.eval()
 
         print("Starting train accuracy calculation for epoch {}".format(epoch))
-        train_accuracy = calculate_train_accuracy(global_model,
-                                                  data_loader_train,
-                                                  len(train_data),
-                                                  device,
-                                                  _batch_size)
+        train_accuracy = calculate_set_accuracy(global_model,
+                                                data_loader_train,
+                                                len(train_data),
+                                                device,
+                                                _batch_size)
 
         # wandb.log({'train_accuracy_history': train_accuracy,  'epoch': epoch})
 
@@ -524,7 +495,7 @@ if __name__ == '__main__':
 
         print("Starting validation accuracy calculation for epoch {}".format(epoch))
         print(all_data_img_folder.class_to_idx)
-        val_accuracy = calculate_val_accuracy(global_model,
+        val_accuracy = calculate_set_accuracy(global_model,
                                               data_loader_val,
                                               len(val_data),
                                               device,
@@ -591,11 +562,11 @@ if __name__ == '__main__':
 
             print(
                 "Fine Tuning: starting train accuracy calculation for epoch {}".format(epoch))
-            train_accuracy = calculate_train_accuracy(global_model,
-                                                      data_loader_train,
-                                                      len(train_data),
-                                                      device,
-                                                      _batch_size)
+            train_accuracy = calculate_set_accuracy(global_model,
+                                                    data_loader_train,
+                                                    len(train_data),
+                                                    device,
+                                                    _batch_size)
 
             # wandb.log({'train_accuracy_history': train_accuracy,  'epoch': epoch})
 
@@ -606,7 +577,7 @@ if __name__ == '__main__':
             print(
                 "Fine Tuning: starting validation accuracy calculation for epoch {}".format(epoch))
             print(all_data_img_folder.class_to_idx)
-            val_accuracy = calculate_val_accuracy(global_model,
+            val_accuracy = calculate_set_accuracy(global_model,
                                                   data_loader_val,
                                                   len(val_data),
                                                   device,
