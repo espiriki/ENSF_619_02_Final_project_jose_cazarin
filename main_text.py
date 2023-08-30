@@ -35,6 +35,29 @@ BASE_PATH = "../"
 TRAIN_DATA_PATH = BASE_PATH + "test_dataset_with_text"
 
 
+class Transforms:
+    def __init__(self, img_transf: A.Compose):
+        self.img_transf = img_transf
+
+    def __call__(self, img, *args, **kwargs):
+        img = np.array(img)
+        augmented = self.img_transf(image=img)
+        image = augmented["image"]
+        return image
+
+
+# Just to avoid errors in the loader
+def get_image_pipeline():
+    pipeline = A.Compose([
+        A.Resize(width=320,
+                 height=320,
+                 interpolation=cv2.INTER_CUBIC),
+        a_pytorch.transforms.ToTensorV2()
+    ])
+
+    return pipeline
+
+
 def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
                   batch_size, train_optimizer, weights, use_class_weights, acc_steps):
 
@@ -52,8 +75,9 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
     for batch_idx, (data, labels) in enumerate(data_loader):
         texts = data['text']
 
-        input_token_ids = texts['tokens'].to(device)
-        attention_mask = texts['attention_mask'].to(device)
+        input_token_ids = texts['tokens'].to(hw_device)
+        attention_mask = texts['attention_mask'].to(hw_device)
+        labels = labels.to(hw_device)
 
         model_outputs = model(_input_ids=input_token_ids,
                               _attention_mask=attention_mask)
@@ -104,6 +128,7 @@ def calculate_set_accuracy(
 
             input_token_ids = texts['tokens'].to(device)
             attention_mask = texts['attention_mask'].to(device)
+            labels = labels.to(device)
 
             # Inference
             outputs = model(_input_ids=input_token_ids,
@@ -188,11 +213,17 @@ if __name__ == '__main__':
     print("Text Model: {}".format(args.text_model))
 
     global_model = DistilBert(_num_classes, args.model_dropout)
-    _batch_size = 64
+    _batch_size = 24
 
     if args.text_model == "distilbert":
         global_model = DistilBert(_num_classes, args.model_dropout)
-        _batch_size = 64
+        _batch_size = 24
+    elif args.text_model == "roberta":
+        global_model = Roberta(_num_classes, args.model_dropout)
+        _batch_size = 24
+    else:
+        print("Invalid Model: {}".format(args.text_model))
+        sys.exit(1)
 
     print("Num total parameters of the model: {}".format(
         count_parameters(global_model)))
@@ -219,7 +250,9 @@ if __name__ == '__main__':
     all_data_text_folder = CustomImageTextFolder(
         root=TRAIN_DATA_PATH,
         tokens_max_len=_max_len,
-        tokenizer_text=_tokenizer)
+        tokenizer_text=_tokenizer,
+        transform=Transforms(img_transf=get_image_pipeline()),
+    )
 
     print(f"Total num of texts: {len(all_data_text_folder)}")
     for i in range(_num_classes):
@@ -248,17 +281,18 @@ if __name__ == '__main__':
     sets = [Y_train_set, Y_validation_set, Y_test_set]
     sets_names = ["Train", "Validation", "Test"]
     class_weights = []
-    
+
     num_samples_each_class = np.unique(Y_train_set, return_counts=True)[1]
     total_num_samples_dataset = np.sum(num_samples_each_class)
-    
+
     for i in range(_num_classes):
         class_weight = total_num_samples_dataset / \
             (_num_classes * num_samples_each_class[i])
         class_weights.append(class_weight)
-    
+
     for set, set_name in zip(sets, sets_names):
-        print("{} set num of samples: {}".format(set_name, total_num_samples_dataset))
+        print("{} set num of samples: {}".format(
+            set_name, total_num_samples_dataset))
         for i in range(_num_classes):
             print("    {} set percentage of class {}: {:.2f}".format(
                 set_name,
@@ -347,10 +381,10 @@ if __name__ == '__main__':
         train_accuracy_history.append(train_accuracy)
 
         print("Starting validation accuracy calculation for epoch {}".format(epoch))
-        print(all_data_img_folder.class_to_idx)
+        print(all_data_text_folder.class_to_idx)
         val_accuracy = calculate_set_accuracy(global_model,
                                               data_loader_val,
-                                              len(val_data),
+                                              len(data_loader_val.dataset),
                                               device,
                                               _batch_size)
 
@@ -361,7 +395,7 @@ if __name__ == '__main__':
 
         if val_accuracy > max_val_accuracy:
             print("Best model obtained based on Val Acc. Saving it!")
-            save_model_weights(global_model, args.model,
+            save_model_weights(global_model, args.text_model,
                                epoch, val_accuracy, device, False, args.balance_weights)
             max_val_accuracy = val_accuracy
             best_epoch = epoch
@@ -442,7 +476,7 @@ if __name__ == '__main__':
 
             if val_accuracy > max_val_accuracy:
                 print("Fine Tuning: best model obtained based on Val Acc. Saving it!")
-                save_model_weights(global_model, args.model,
+                save_model_weights(global_model, args.text_model,
                                    epoch, val_accuracy, device, True, args.balance_weights)
                 best_epoch = epoch
                 max_val_accuracy = val_accuracy
@@ -452,19 +486,19 @@ if __name__ == '__main__':
 
     # Finished training, save data
     with open(BASE_PATH + 'save/train_loss_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
-            args.model, args.lr, args.reg, args.balance_weights), 'w') as f:
+            args.text_model, args.lr, args.reg, args.balance_weights), 'w') as f:
 
         write = csv.writer(f)
         write.writerow(map(lambda x: x, train_loss_history))
 
     with open(BASE_PATH + 'save/train_acc_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
-            args.model, args.lr, args.reg, args.balance_weights), 'w') as f:
+            args.text_model, args.lr, args.reg, args.balance_weights), 'w') as f:
 
         write = csv.writer(f)
         write.writerow(map(lambda x: x, train_accuracy_history))
 
     with open(BASE_PATH + 'save/val_acc_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
-            args.model, args.lr, args.reg, args.balance_weights), 'w') as f:
+            args.text_model, args.lr, args.reg, args.balance_weights), 'w') as f:
 
         write = csv.writer(f)
         write.writerow(map(lambda x: x, val_accuracy_history))
@@ -475,10 +509,10 @@ if __name__ == '__main__':
     plt.plot(range(len(train_loss_history)), train_loss_history)
     plt.xlabel('Epochs')
     plt.ylabel('Train loss')
-    plt.title('Model: {}'.format(args.model))
+    plt.title('Model: {}'.format(args.text_model))
     plt.savefig(
         BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_class_weights_{}_train_loss.png'.format(
-            args.model, args.epochs, args.lr, args.reg, args.balance_weights))
+            args.text_model, args.epochs, args.lr, args.reg, args.balance_weights))
 
     # Plot train accuracy
     train_accuracy_history = torch.FloatTensor(train_accuracy_history).cpu()
@@ -486,19 +520,19 @@ if __name__ == '__main__':
     plt.plot(range(len(train_accuracy_history)), train_accuracy_history)
     plt.xlabel('Epochs')
     plt.ylabel('Train accuracy')
-    plt.title('Model: {}'.format(args.model))
+    plt.title('Model: {}'.format(args.text_model))
     plt.savefig(
         BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_class_weights_{}_train_accuracy.png'.format(
-            args.model, args.epochs, args.lr, args.reg, args.balance_weights))
+            args.text_model, args.epochs, args.lr, args.reg, args.balance_weights))
 
     # Plot val accuracy
     plt.figure()
     plt.plot(range(len(val_accuracy_history)), val_accuracy_history)
     plt.xlabel('Epochs')
     plt.ylabel('Val accuracy per Epoch')
-    plt.title('Model: {}'.format(args.model))
+    plt.title('Model: {}'.format(args.text_model))
     plt.savefig(
         BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_class_weights_{}_val_accuracy.png'.format(
-            args.model, args.epochs, args.lr, args.reg, args.balance_weights))
+           args.text_model, args.epochs, args.lr, args.reg, args.balance_weights))
 
     # run.finish()

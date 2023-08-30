@@ -308,11 +308,14 @@ class DatasetFolder(VisionDataset):
 
                 # Padding to max_len
                 # Equivalent to the resizing of the images
-                pad_to_max_length=True,
+                padding='max_length',
 
                 # pt = pytorch
                 return_tensors='pt'
             )
+
+            tokens_dict['tokens'] = encoding['input_ids'].flatten()
+            tokens_dict['attention_mask'] = encoding['attention_mask'].flatten()
 
             tokens_dict['tokens'] = encoding['input_ids'].flatten()
             tokens_dict['attention_mask'] = encoding['attention_mask'].flatten()
