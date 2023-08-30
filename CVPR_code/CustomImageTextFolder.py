@@ -304,9 +304,9 @@ class DatasetFolder(VisionDataset):
 
                 return_token_type_ids=False,
 
-                # Padding to self.max_len
+                # Padding to max_len
                 # Equivalent to the resizing of the images
-                pad_to_max_length=True,
+                padding=True,
 
                 # pt = pytorch
                 return_tensors='pt'

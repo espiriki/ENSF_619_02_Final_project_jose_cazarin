@@ -26,12 +26,13 @@ from CVPR_code.CustomImageTextFolder import *
 from CVPR_code.text_models import *
 from torchmetrics.classification import ConfusionMatrix
 import ssl
+from sklearn.model_selection import train_test_split as tts
 
 _num_classes = 4
 
 BASE_PATH = "../"
 
-TRAIN_DATA_PATH = BASE_PATH + "dataset_winter_2023_resized"
+TRAIN_DATA_PATH = BASE_PATH + "test_dataset_with_text"
 
 
 def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
@@ -54,8 +55,8 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
         input_token_ids = texts['tokens'].to(device)
         attention_mask = texts['attention_mask'].to(device)
 
-        model_outputs = text_and_image_model(_input_ids=input_token_ids,
-                                             _attention_mask=attention_mask)
+        model_outputs = model(_input_ids=input_token_ids,
+                              _attention_mask=attention_mask)
 
         loss = criterion(model_outputs, labels)
 
@@ -149,6 +150,10 @@ def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tu
 def count_parameters(model): return sum(p.numel() for p in model.parameters())
 
 
+def get_keys_from_value(d, val):
+    return [k for k, v in d.items() if v == val][0]
+
+
 if __name__ == '__main__':
     args = args_parser()
 
@@ -209,8 +214,12 @@ if __name__ == '__main__':
         print("Using {} GPUs".format(torch.cuda.device_count()))
         global_model = nn.DataParallel(global_model)
 
+    _tokenizer = global_model.get_tokenizer()
+    _max_len = global_model.get_max_token_size()
     all_data_text_folder = CustomImageTextFolder(
-        root=TRAIN_DATA_PATH)
+        root=TRAIN_DATA_PATH,
+        tokens_max_len=_max_len,
+        tokenizer_text=_tokenizer)
 
     print(f"Total num of texts: {len(all_data_text_folder)}")
     for i in range(_num_classes):
@@ -218,58 +227,55 @@ if __name__ == '__main__':
         print("Num of samples for class {}: {}. Percentage of dataset: {:.2f}".format(
             i, len_samples, (len_samples/len(all_data_text_folder))*100))
 
-    VALID_SPLIT = 0.90
+    # 80% for training
+    TEST_VALIDATION_SPLIT = 0.80
 
-    train_data_per_class = []
-    val_data_per_class = []
+    X_train_set, X_val_plus_test_set, Y_train_set, Y_val_plus_test_set = tts(
+        all_data_text_folder,
+        all_data_text_folder.targets,
+        test_size=1-(TEST_VALIDATION_SPLIT),
+        stratify=all_data_text_folder.targets
+    )
 
-    # Splitting the dataset while maintaining class proportions
-    for all_data_current_class in all_data_text_folder.per_class:
+    X_validation_set, X_test_set, Y_validation_set, Y_test_set = tts(
+        X_val_plus_test_set,
+        Y_val_plus_test_set,
+        # From the rest, evenly divide between val and test set
+        test_size=0.5,
+        stratify=Y_val_plus_test_set,
+    )
 
-        class_dataset_size = len(all_data_current_class)
-        indices = torch.randperm(class_dataset_size).tolist()
-        split_size = int(VALID_SPLIT*class_dataset_size)
-
-        dataset_train = Subset(all_data_current_class, indices[:split_size])
-        dataset_val = Subset(all_data_current_class, indices[split_size:])
-
-        train_data_per_class.append(dataset_train)
-        val_data_per_class.append(dataset_val)
-
-    # Flatenning the list of lists (one list per class) into a single list
-    train_data = list(itertools.chain.from_iterable(train_data_per_class))
-    val_data = list(itertools.chain.from_iterable(val_data_per_class))
+    sets = [Y_train_set, Y_validation_set, Y_test_set]
+    sets_names = ["Train", "Validation", "Test"]
     class_weights = []
-
-    print("Num of training texts: {}".format(len(train_data)))
+    
+    num_samples_each_class = np.unique(Y_train_set, return_counts=True)[1]
+    total_num_samples_dataset = np.sum(num_samples_each_class)
+    
     for i in range(_num_classes):
-        len_samples = len(train_data_per_class[i])
-        print("Num of training samples for class {}: {}. Percentage of dataset: {:.2f}".format(
-            i, len_samples, (len_samples/len(train_data))*100))
-        this_weight = len(train_data)/(_num_classes * len_samples)
-        class_weights.append(this_weight)
+        class_weight = total_num_samples_dataset / \
+            (_num_classes * num_samples_each_class[i])
+        class_weights.append(class_weight)
+    
+    for set, set_name in zip(sets, sets_names):
+        print("{} set num of samples: {}".format(set_name, total_num_samples_dataset))
+        for i in range(_num_classes):
+            print("    {} set percentage of class {}: {:.2f}".format(
+                set_name,
+                get_keys_from_value(all_data_text_folder.class_to_idx, i),
+                100*(num_samples_each_class[i]/total_num_samples_dataset)))
 
     print("Class weights: {}".format(class_weights))
 
-    print("Num of validaton texts: {}".format(len(val_data)))
-    for i in range(_num_classes):
-        len_samples = len(val_data_per_class[i])
-        print("Num of validation samples for class {}: {}. Percentage of dataset: {:.2f}".format(
-            i, len_samples, (len_samples/len(val_data))*100))
+    _num_workers = 16
 
-    _num_workers = 32
-
-    train_data = CustomImageTextFolder(root=None, custom_samples=train_data)
-
-    val_data = CustomImageTextFolder(root=None, custom_samples=val_data)
-
-    data_loader_train = torch.utils.data.DataLoader(dataset=train_data,
+    data_loader_train = torch.utils.data.DataLoader(dataset=X_train_set,
                                                     batch_size=_batch_size,
                                                     shuffle=True,
                                                     num_workers=_num_workers,
                                                     pin_memory=True)
 
-    data_loader_val = torch.utils.data.DataLoader(dataset=val_data,
+    data_loader_val = torch.utils.data.DataLoader(dataset=X_validation_set,
                                                   batch_size=_batch_size,
                                                   shuffle=True,
                                                   num_workers=_num_workers,
@@ -290,6 +296,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     print("Starting training...")
+    # global_model = torch.compile(global_model)
     global_model.to(device)
     max_val_accuracy = 0.0
     best_epoch = 0
@@ -302,7 +309,7 @@ if __name__ == '__main__':
         num_batches, train_loss_per_batch = run_one_epoch(epoch,
                                                           global_model,
                                                           data_loader_train,
-                                                          len(train_data),
+                                                          len(data_loader_train.dataset),
                                                           device,
                                                           _batch_size,
                                                           optimizer,
@@ -328,8 +335,8 @@ if __name__ == '__main__':
 
         print("Starting train accuracy calculation for epoch {}".format(epoch))
         train_accuracy = calculate_set_accuracy(global_model,
-                                                data_loader_train,
-                                                len(train_data),
+                                                data_loader_val,
+                                                len(data_loader_val.dataset),
                                                 device,
                                                 _batch_size)
 

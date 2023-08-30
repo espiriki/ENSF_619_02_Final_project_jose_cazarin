@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from transformers import BertModel, DistilBertModel, RobertaModel
+from transformers import DistilBertConfig
 from torchvision.models import *
 from transformers import BertTokenizer, DistilBertTokenizer, RobertaTokenizer
 
@@ -34,6 +35,9 @@ class DistilBert(nn.Module):
 
     def get_tokenizer(self):
         return DistilBertTokenizer.from_pretrained(self.name)
+    
+    def get_max_token_size(self):
+        return DistilBertConfig().max_position_embeddings
 
 
 class Roberta(nn.Module):
