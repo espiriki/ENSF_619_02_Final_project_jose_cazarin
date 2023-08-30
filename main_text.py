@@ -164,7 +164,7 @@ if __name__ == '__main__':
 
     config = dict(
         learning_rate=args.lr,
-        architecture=args.model,
+        architecture=args.text_model,
         regularization=args.reg,
         num_epochs=args.epochs,
         dataset_id="garbage",
@@ -180,7 +180,7 @@ if __name__ == '__main__':
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    print("Model: {}".format(args.model))
+    print("Text Model: {}".format(args.text_model))
 
     global_model = DistilBert(_num_classes, args.model_dropout)
     _batch_size = 64
@@ -212,11 +212,11 @@ if __name__ == '__main__':
     all_data_text_folder = CustomImageTextFolder(
         root=TRAIN_DATA_PATH)
 
-    print(f"Total num of texts: {len(all_data_img_folder)}")
+    print(f"Total num of texts: {len(all_data_text_folder)}")
     for i in range(_num_classes):
-        len_samples = len(all_data_img_folder.per_class[i])
+        len_samples = len(all_data_text_folder.per_class[i])
         print("Num of samples for class {}: {}. Percentage of dataset: {:.2f}".format(
-            i, len_samples, (len_samples/len(all_data_img_folder))*100))
+            i, len_samples, (len_samples/len(all_data_text_folder))*100))
 
     VALID_SPLIT = 0.90
 
@@ -224,7 +224,7 @@ if __name__ == '__main__':
     val_data_per_class = []
 
     # Splitting the dataset while maintaining class proportions
-    for all_data_current_class in all_data_img_folder.per_class:
+    for all_data_current_class in all_data_text_folder.per_class:
 
         class_dataset_size = len(all_data_current_class)
         indices = torch.randperm(class_dataset_size).tolist()
@@ -256,9 +256,6 @@ if __name__ == '__main__':
         len_samples = len(val_data_per_class[i])
         print("Num of validation samples for class {}: {}. Percentage of dataset: {:.2f}".format(
             i, len_samples, (len_samples/len(val_data))*100))
-
-    print("Mean Train Dataset: {}, STD Train Dataset: {}".format(
-        mean_train_dataset, std_train_dataset))
 
     _num_workers = 32
 

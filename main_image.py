@@ -207,7 +207,7 @@ if __name__ == '__main__':
 
     config = dict(
         learning_rate=args.lr,
-        architecture=args.model,
+        architecture=args.image_model,
         regularization=args.reg,
         num_epochs=args.epochs,
         dataset_id="garbage",
@@ -223,60 +223,61 @@ if __name__ == '__main__':
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    print("Model: {}".format(args.model))
+    print("Image Model: {}".format(args.image_model))
 
     global_model = EffNetB4(_num_classes, args.tl)
     input_size = eff_net_sizes["b4"]
     _batch_size = 32
 
-    if args.model == "b0":
+    model = args.image_model
+    if model == "b0":
         global_model = EffNetB0(_num_classes, args.tl)
-        input_size = eff_net_sizes[args.model]
+        input_size = eff_net_sizes[model]
         _batch_size = 40
-    elif args.model == "b4":
+    elif model == "b4":
         global_model = EffNetB4(_num_classes, args.tl)
-        input_size = eff_net_sizes[args.model]
+        input_size = eff_net_sizes[model]
         _batch_size = 32
-    elif args.model == "eff_v2_small":
+    elif model == "eff_v2_small":
         global_model = EffNetV2_S(_num_classes, args.tl)
-        input_size = eff_net_sizes[args.model]
+        input_size = eff_net_sizes[model]
         _batch_size = 48
-    elif args.model == "eff_v2_medium":
+    elif model == "eff_v2_medium":
         global_model = EffNetV2_M(_num_classes, args.tl)
-        input_size = eff_net_sizes[args.model]
+        input_size = eff_net_sizes[model]
         _batch_size = 24
         args.acc_steps = 12
-    elif args.model == "eff_v2_large":
+    elif model == "eff_v2_large":
         global_model = EffNetV2_L(_num_classes, args.tl)
-        input_size = eff_net_sizes[args.model]
+        input_size = eff_net_sizes[model]
         _batch_size = 8
         args.acc_steps = 36
-    elif args.model == "res18":
+    elif model == "res18":
         global_model = ResNet18(_num_classes, args.tl)
         input_size = (300, 300)
         _batch_size = 256
-    elif args.model == "res50":
+    elif model == "res50":
         global_model = ResNet50(_num_classes, args.tl)
         input_size = (400, 400)
         _batch_size = 96
-    elif args.model == "res152":
+    elif model == "res152":
         global_model = ResNet152(_num_classes, args.tl)
         input_size = (500, 500)
         _batch_size = 32
-    elif args.model == "mb":
+    elif model == "mb":
         global_model = MBNetLarge(_num_classes, args.tl)
         input_size = (320, 320)
         _batch_size = 256
-    elif args.model == "convnext":
+    elif model == "convnext":
         global_model = ConvNextBase(_num_classes, args.tl)
         input_size = (224, 224)
         _batch_size = 128
-    elif args.model == "transformer":
+    elif model == "transformer":
         global_model = VisionB16(_num_classes, args.tl)
         input_size = (224, 224)
         _batch_size = 128
     else:
-        print("Invalid Model: {}".format(args.model))
+        print("Invalid Model: {}".format(model))
         sys.exit(1)
 
     print("Num total parameters of the model: {}".format(

@@ -317,14 +317,6 @@ class DatasetFolder(VisionDataset):
             'image_path': path['image']
         }
 
-        # print("getting item")
-        # zero out image
-        sample_image = torch.zeros(sample_image.shape)
-
-        # print("type:", type(sample_image))
-        # print("shape:", sample_image.shape)
-        # print("img:", sample_image)
-
         tokens_dict = {
             'original_text': path['text'],
         }

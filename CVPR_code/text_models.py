@@ -16,7 +16,7 @@ class DistilBert(nn.Module):
             param.requires_grad = False
 
         self.drop = nn.Dropout(p=drop_ratio)
-        self.out = nn.Linear(self.bert.config.hidden_size, n_classes)
+        self.out = nn.Linear(self.model.config.hidden_size, n_classes)
 
     # https://github.com/huggingface/transformers/blob/v4.31.0/src/transformers/models/distilbert/modeling_distilbert.py#L729
     def forward(self, input_ids, attention_mask):
