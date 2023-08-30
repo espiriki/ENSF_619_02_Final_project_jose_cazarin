@@ -280,7 +280,9 @@ class DatasetFolder(VisionDataset):
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        encoding = {}
+        tokens_dict = {
+            'original_text': path['text'],
+        }
         if self.tokenizer is not None:
             encoding = self.tokenizer.encode_plus(
                 path['text'],
@@ -306,25 +308,19 @@ class DatasetFolder(VisionDataset):
 
                 # Padding to max_len
                 # Equivalent to the resizing of the images
-                padding=True,
+                pad_to_max_length=True,
 
                 # pt = pytorch
                 return_tensors='pt'
             )
 
+            tokens_dict['tokens'] = encoding['input_ids'].flatten()
+            tokens_dict['attention_mask'] = encoding['attention_mask'].flatten()
+
         image_dict = {
             'raw_image': sample_image,
             'image_path': path['image']
         }
-
-        tokens_dict = {
-            'original_text': path['text'],
-        }
-
-        if len(encoding) != 0:
-            tokens_dict['tokens'] = encoding['input_ids'].flatten()
-            # attention mask to ignore padding
-            tokens_dict['attention_mask'] = encoding['attention_mask'].flatten()
 
         return {'image': image_dict, 'text': tokens_dict}, target
 
