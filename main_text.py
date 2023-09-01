@@ -30,10 +30,7 @@ from sklearn.model_selection import train_test_split as tts
 
 _num_classes = 4
 
-BASE_PATH = "../"
-
-TRAIN_DATA_PATH = BASE_PATH + "test_dataset_with_text"
-
+BASE_PATH = "/project/def-rmsouza/jocazar/"
 
 class Transforms:
     def __init__(self, img_transf: A.Compose):
@@ -104,7 +101,6 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
         cpu_loss = loss.cpu()
         cpu_loss = cpu_loss.detach()
         batch_loss.append(cpu_loss)
-        break
 
     print("\n")
 
@@ -147,21 +143,21 @@ def calculate_set_accuracy(
         return acc
 
 
-def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tuning, class_weights):
+def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tuning, class_weights, opt):
 
     if fine_tuning:
-        base_name = "model_weights/BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_FractionLR_{}_VAL_ACC_{:.3f}_".format(
-            model_name, epoch_num+1, args.lr, args.reg, args.fraction_lr, val_acc)
+        base_name = BASE_PATH+"model_weights/BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_FractionLR_{}_Opt_{}_VAL_ACC_{:.3f}_".format(
+            model_name, epoch_num+1, args.lr, args.reg, args.fraction_lr, opt, val_acc)
 
     else:
 
-        base_name = "model_weights/BEST_model_{}_epoch_{}_LR_{}_Reg_{}_VAL_ACC_{:.3f}_".format(
+        base_name = BASE_PATH+"model_weights/BEST_model_{}_epoch_{}_LR_{}_Reg_{}_VAL_ACC_{:.3f}_".format(
             model_name, epoch_num+1, args.lr, args.reg, val_acc)
 
     base_name = base_name + "class_weights_{}".format(class_weights)
     base_name = base_name + ".pth"
 
-    weights_path = BASE_PATH + base_name
+    weights_path = base_name
 
     model.to("cpu")
 
@@ -213,14 +209,14 @@ if __name__ == '__main__':
     print("Text Model: {}".format(args.text_model))
 
     global_model = DistilBert(_num_classes, args.model_dropout)
-    _batch_size = 24
+    _batch_size = 32
 
     if args.text_model == "distilbert":
         global_model = DistilBert(_num_classes, args.model_dropout)
-        _batch_size = 24
+        _batch_size = 48
     elif args.text_model == "roberta":
         global_model = Roberta(_num_classes, args.model_dropout)
-        _batch_size = 24
+        _batch_size = 32
     else:
         print("Invalid Model: {}".format(args.text_model))
         sys.exit(1)
@@ -248,7 +244,7 @@ if __name__ == '__main__':
     _tokenizer = global_model.get_tokenizer()
     _max_len = global_model.get_max_token_size()
     all_data_text_folder = CustomImageTextFolder(
-        root=TRAIN_DATA_PATH,
+        root=args.dataset_path,
         tokens_max_len=_max_len,
         tokenizer_text=_tokenizer,
         transform=Transforms(img_transf=get_image_pipeline()),
@@ -301,7 +297,7 @@ if __name__ == '__main__':
 
     print("Class weights: {}".format(class_weights))
 
-    _num_workers = 16
+    _num_workers = 8
 
     data_loader_train = torch.utils.data.DataLoader(dataset=X_train_set,
                                                     batch_size=_batch_size,
@@ -315,9 +311,16 @@ if __name__ == '__main__':
                                                   num_workers=_num_workers,
                                                   pin_memory=True)
 
+    data_loader_test = torch.utils.data.DataLoader(dataset=X_test_set,
+                                                  batch_size=_batch_size,
+                                                  shuffle=True,
+                                                  num_workers=_num_workers,
+                                                  pin_memory=True)                                                  
+
     train_loss_history = []
     train_accuracy_history = []
     val_accuracy_history = []
+    test_accuracy_history = []
 
     if args.opt == "adamw":
         optimizer = torch.optim.AdamW(
@@ -332,7 +335,7 @@ if __name__ == '__main__':
     print("Starting training...")
     # global_model = torch.compile(global_model)
     global_model.to(device)
-    max_val_accuracy = 0.0
+    max_test_accuracy = 0.0
     best_epoch = 0
 
     for epoch in range(args.epochs):
@@ -366,11 +369,11 @@ if __name__ == '__main__':
             epoch, np.min(train_loss_per_batch)))
 
         global_model.eval()
-
+        
         print("Starting train accuracy calculation for epoch {}".format(epoch))
         train_accuracy = calculate_set_accuracy(global_model,
-                                                data_loader_val,
-                                                len(data_loader_val.dataset),
+                                                data_loader_train,
+                                                len(data_loader_train.dataset),
                                                 device,
                                                 _batch_size)
 
@@ -380,28 +383,41 @@ if __name__ == '__main__':
             epoch, train_accuracy))
         train_accuracy_history.append(train_accuracy)
 
-        print("Starting validation accuracy calculation for epoch {}".format(epoch))
-        print(all_data_text_folder.class_to_idx)
+        print("Starting val accuracy calculation for epoch {}".format(epoch))
         val_accuracy = calculate_set_accuracy(global_model,
-                                              data_loader_val,
-                                              len(data_loader_val.dataset),
+                                                data_loader_val,
+                                                len(data_loader_val.dataset),
+                                                device,
+                                                _batch_size)
+
+        # wandb.log({'train_accuracy_history': train_accuracy,  'epoch': epoch})
+
+        print("Val set accuracy on epoch {}: {:.3f} ".format(
+            epoch, val_accuracy))
+        val_accuracy_history.append(val_accuracy)
+
+        print("Starting test accuracy calculation for epoch {}".format(epoch))
+        print(all_data_text_folder.class_to_idx)
+        test_accuracy = calculate_set_accuracy(global_model,
+                                              data_loader_test,
+                                              len(data_loader_test.dataset),
                                               device,
                                               _batch_size)
 
         # wandb.log({'val_accuracy_history': val_accuracy_history,  'epoch': epoch})
 
-        print("Val set accuracy on epoch {}: {:.3f}".format(epoch, val_accuracy))
-        val_accuracy_history.append(val_accuracy)
+        print("Train set accuracy on epoch {}: {:.3f}".format(epoch, test_accuracy))
+        test_accuracy_history.append(test_accuracy)
 
-        if val_accuracy > max_val_accuracy:
-            print("Best model obtained based on Val Acc. Saving it!")
+        if test_accuracy > max_test_accuracy:
+            print("Best model obtained based on Test Acc. Saving it!")
             save_model_weights(global_model, args.text_model,
-                               epoch, val_accuracy, device, False, args.balance_weights)
-            max_val_accuracy = val_accuracy
+                               epoch, test_accuracy, device, False, args.balance_weights, args.opt)
+            max_test_accuracy = test_accuracy
             best_epoch = epoch
         else:
-            print("Not saving model on epoch {}, best Val Acc so far on epoch {}: {:.3f}".format(epoch, best_epoch,
-                                                                                                 max_val_accuracy))
+            print("Not saving model on epoch {}, best Test Acc so far on epoch {}: {:.3f}".format(epoch, best_epoch,
+                                                                                                 max_test_accuracy))
 
     print("Starting Fine tuning!!")
     # Fine tuning loop
@@ -423,7 +439,7 @@ if __name__ == '__main__':
             ft_num_batches, ft_train_loss_per_batch = run_one_epoch(epoch,
                                                                     global_model,
                                                                     data_loader_train,
-                                                                    len(train_data),
+                                                                    len(data_loader_train.dataset),
                                                                     device,
                                                                     _batch_size,
                                                                     optimizer,
@@ -451,7 +467,7 @@ if __name__ == '__main__':
                 "Fine Tuning: starting train accuracy calculation for epoch {}".format(epoch))
             train_accuracy = calculate_set_accuracy(global_model,
                                                     data_loader_train,
-                                                    len(train_data),
+                                                    len(data_loader_train.dataset),
                                                     device,
                                                     _batch_size)
 
@@ -462,27 +478,37 @@ if __name__ == '__main__':
             train_accuracy_history.append(train_accuracy)
 
             print(
-                "Fine Tuning: starting validation accuracy calculation for epoch {}".format(epoch))
-            print(all_data_img_folder.class_to_idx)
+                "Fine Tuning: starting val accuracy calculation for epoch {}".format(epoch))
+            print(all_data_text_folder.class_to_idx)
             val_accuracy = calculate_set_accuracy(global_model,
                                                   data_loader_val,
-                                                  len(val_data),
+                                                  len(data_loader_val.dataset),
                                                   device,
                                                   _batch_size)
             print("Fine Tuning: Val set accuracy on epoch {}: {:.3f}".format(
                 epoch, val_accuracy))
-
             val_accuracy_history.append(val_accuracy)
+            
+            print(
+                "Fine Tuning: starting test accuracy calculation for epoch {}".format(epoch))
+            test_accuracy = calculate_set_accuracy(global_model,
+                                                  data_loader_test,
+                                                  len(data_loader_test.dataset),
+                                                  device,
+                                                  _batch_size)
+            print("Fine Tuning: Test set accuracy on epoch {}: {:.3f}".format(
+                epoch, test_accuracy))            
+            test_accuracy_history.append(test_accuracy)
 
-            if val_accuracy > max_val_accuracy:
+            if test_accuracy > max_test_accuracy:
                 print("Fine Tuning: best model obtained based on Val Acc. Saving it!")
                 save_model_weights(global_model, args.text_model,
-                                   epoch, val_accuracy, device, True, args.balance_weights)
+                                   epoch, test_accuracy, device, True, args.balance_weights, args.opt)
                 best_epoch = epoch
-                max_val_accuracy = val_accuracy
+                max_test_accuracy = test_accuracy
             else:
-                print("Fine Tuning: not saving model, best Val Acc so far on epoch {}: {:.3f}".format(best_epoch,
-                                                                                                      max_val_accuracy))
+                print("Fine Tuning: not saving model, best test Acc so far on epoch {}: {:.3f}".format(best_epoch,
+                                                                                                      max_test_accuracy))
 
     # Finished training, save data
     with open(BASE_PATH + 'save/train_loss_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
@@ -502,6 +528,12 @@ if __name__ == '__main__':
 
         write = csv.writer(f)
         write.writerow(map(lambda x: x, val_accuracy_history))
+        
+    with open(BASE_PATH + 'save/test_acc_model_{}_LR_{}_REG_{}_OPT_{}_class_weights_{}.csv'.format(
+            args.text_model, args.lr, args.reg, args.opt, args.balance_weights), 'w') as f:
+
+        write = csv.writer(f)
+        write.writerow(map(lambda x: x, test_accuracy_history))        
 
     # Plot train loss
     train_loss_history = torch.FloatTensor(train_loss_history).cpu()
@@ -511,8 +543,8 @@ if __name__ == '__main__':
     plt.ylabel('Train loss')
     plt.title('Model: {}'.format(args.text_model))
     plt.savefig(
-        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_class_weights_{}_train_loss.png'.format(
-            args.text_model, args.epochs, args.lr, args.reg, args.balance_weights))
+        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_train_loss.png'.format(
+            args.text_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
 
     # Plot train accuracy
     train_accuracy_history = torch.FloatTensor(train_accuracy_history).cpu()
@@ -522,8 +554,8 @@ if __name__ == '__main__':
     plt.ylabel('Train accuracy')
     plt.title('Model: {}'.format(args.text_model))
     plt.savefig(
-        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_class_weights_{}_train_accuracy.png'.format(
-            args.text_model, args.epochs, args.lr, args.reg, args.balance_weights))
+        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_train_accuracy.png'.format(
+            args.text_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
 
     # Plot val accuracy
     plt.figure()
@@ -532,7 +564,17 @@ if __name__ == '__main__':
     plt.ylabel('Val accuracy per Epoch')
     plt.title('Model: {}'.format(args.text_model))
     plt.savefig(
-        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_class_weights_{}_val_accuracy.png'.format(
-           args.text_model, args.epochs, args.lr, args.reg, args.balance_weights))
+        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_val_accuracy.png'.format(
+           args.text_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
+    
+    # Plot test accuracy
+    plt.figure()
+    plt.plot(range(len(test_accuracy_history)), test_accuracy_history)
+    plt.xlabel('Epochs')
+    plt.ylabel('Test accuracy per Epoch')
+    plt.title('Model: {}'.format(args.text_model))
+    plt.savefig(
+        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_test_accuracy.png'.format(
+           args.text_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))    
 
     # run.finish()

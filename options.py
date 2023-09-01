@@ -10,6 +10,8 @@ def args_parser():
 
     parser.add_argument('--epochs', type=int, default=100,
                         help="number of rounds of training")
+    parser.add_argument('--dataset_path', type=str, default="",
+                        help="dataset location")                        
     parser.add_argument('--lr', type=float, default=0.001,
                         help='learning rate')
     parser.add_argument('--reg', type=float, default=1e-2,
@@ -20,7 +22,7 @@ def args_parser():
         '--tl', action=argparse.BooleanOptionalAction, default=True, help="Whether to use transfer learning or not")
     parser.add_argument('--balance_weights',
                         action=argparse.BooleanOptionalAction, default=False, help="Whether to use class balance weights or not")
-    parser.add_argument('--ft_epochs', type=int, default=5,
+    parser.add_argument('--ft_epochs', type=int, default=15,
                         help='number of fine tuning epochs')
     parser.add_argument('--fraction_lr', type=float, default=5,
                         help='value to divide the regular LR for to use in fine tuning')
@@ -33,7 +35,7 @@ def args_parser():
     parser.add_argument('--acc_steps', type=int, default=0,
                         help='Gradient accumulation steps')
 
-    parser.add_argument('--opt', type=str, default="adamw",
+    parser.add_argument('--opt', type=str, default="sgd",
                         help='Optimizer to use')
 
     parser.add_argument('--calculate_dataset_stats',
