@@ -52,6 +52,29 @@ eff_net_sizes = {
 }
 
 BASE_PATH = "/project/def-rmsouza/jocazar/"
+DATASET_NAME="winter_2023_dataset_with_text_original_resized"
+TRAIN_DATASET_PATH="train_set"
+VAL_DATASET_PATH="val_set"
+TEST_DATASET_PATH="test_set"
+
+def get_class_weights(train_dataset_path):
+    
+    train_set = CustomImageTextFolder(train_dataset_path)
+    
+    total_num_samples_dataset = 0.0
+    num_samples_each_class = []
+    for i in range(_num_classes):
+        num_samples_each_class.append(len(train_set.per_class[i]))
+        total_num_samples_dataset +=(len(train_set.per_class[i]))
+      
+    class_weights = []
+
+    for i in range(_num_classes):
+        class_weight = total_num_samples_dataset / \
+            (_num_classes * num_samples_each_class[i])
+        class_weights.append(class_weight)
+        
+    return class_weights
 
 def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
                   batch_size, train_optimizer, weights, use_class_weights, acc_steps):
@@ -138,12 +161,12 @@ def calculate_set_accuracy(
 def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tuning, class_weights, opt):
 
     if fine_tuning:
-        base_name = "model_weights/BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_Opt_{}_FractionLR_{}_VAL_ACC_{:.3f}_".format(
+        base_name = "model_weights/BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_Opt_{}_FractionLR_{}_TEST_ACC_{:.3f}_".format(
             model_name, epoch_num+1, args.lr, args.reg, opt, args.fraction_lr, val_acc)
 
     else:
 
-        base_name = "model_weights/BEST_model_{}_epoch_{}_LR_{}_Reg_{}_Opt_{}_VAL_ACC_{:.3f}_".format(
+        base_name = "model_weights/BEST_model_{}_epoch_{}_LR_{}_Reg_{}_Opt_{}_TEST_ACC_{:.3f}_".format(
             model_name, epoch_num+1, args.lr, args.reg, opt, val_acc)
 
     base_name = base_name + "class_weights_{}".format(class_weights)
@@ -160,14 +183,16 @@ def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tu
     model.to(hw_device)
 
 
-def calculate_mean_std_train_dataset(stats_train_data, pipeline):
+def calculate_mean_std_train_dataset(train_dataset_path, pipeline):
 
-    stats_train_data = CustomImageTextFolder(root=None, custom_samples=stats_train_data,
+    stats_train_data = CustomImageTextFolder(root=train_dataset_path,
                                              transform=Transforms(img_transf=pipeline))
 
     stats_loader = torch.utils.data.DataLoader(dataset=stats_train_data,
                                                batch_size=32,
-                                               shuffle=True, num_workers=8, pin_memory=True)
+                                               shuffle=True,
+                                               num_workers=8,
+                                               pin_memory=True)
 
     channels_sum, channels_squared_sum, num_batches = 0, 0, 0
 
@@ -307,62 +332,18 @@ if __name__ == '__main__':
         a_pytorch.transforms.ToTensorV2()
     ])
 
-    all_data_img_folder = CustomImageTextFolder(
-        root=args.dataset_path)
+    aux = [DATASET_NAME, TRAIN_DATASET_PATH]
+    dataset_folder = '_'.join(aux)
+    train_dataset_path = root=os.path.join(BASE_PATH, dataset_folder)
 
-    print(f"Total num of images: {len(all_data_img_folder)}")
-    for i in range(_num_classes):
-        len_samples = len(all_data_img_folder.per_class[i])
-        print("Num of samples for class {}: {}. Percentage of dataset: {:.2f}".format(
-            i, len_samples, (len_samples/len(all_data_img_folder))*100))
-
-    VALID_SPLIT = 0.80
-
-    train_data_per_class = []
-    val_data_per_class = []
-
-    # Splitting the dataset while maintaining class proportions
-    for all_data_current_class in all_data_img_folder.per_class:
-
-        class_dataset_size = len(all_data_current_class)
-        indices = torch.randperm(class_dataset_size).tolist()
-        split_size = int(VALID_SPLIT*class_dataset_size)
-
-        dataset_train = Subset(all_data_current_class, indices[:split_size])
-        dataset_val = Subset(all_data_current_class, indices[split_size:])
-
-        train_data_per_class.append(dataset_train)
-        val_data_per_class.append(dataset_val)
-
-    # Flatenning the list of lists (one list per class) into a single list
-    train_data = list(itertools.chain.from_iterable(train_data_per_class))
-    val_data = list(itertools.chain.from_iterable(val_data_per_class))
-    class_weights = []
-
-    # print("Common images: {}".format(len(list(set(train_data).intersection(val_data)))))
-
-    print("Num of training images: {}".format(len(train_data)))
-    for i in range(_num_classes):
-        len_samples = len(train_data_per_class[i])
-        print("Num of training samples for class {}: {}. Percentage of dataset: {:.2f}".format(
-            i, len_samples, (len_samples/len(train_data))*100))
-        this_weight = len(train_data)/(_num_classes * len_samples)
-        class_weights.append(this_weight)
+    class_weights = get_class_weights(train_dataset_path)
 
     print("Class weights: {}".format(class_weights))
 
-    print("Num of validaton images: {}".format(len(val_data)))
-    for i in range(_num_classes):
-        len_samples = len(val_data_per_class[i])
-        print("Num of validation samples for class {}: {}. Percentage of dataset: {:.2f}".format(
-            i, len_samples, (len_samples/len(val_data))*100))
-
-    mean_train_dataset = []
-    std_train_dataset = []
     if args.calculate_dataset_stats is True:
         print("Calculating Train Dataset statistics...")
         mean_train_dataset, std_train_dataset = calculate_mean_std_train_dataset(
-            train_data, STATS_PIPELINE)
+            train_dataset_path, STATS_PIPELINE)
     else:
         # Already calculated in another run
         mean_train_dataset = [0.5558, 0.5318, 0.5029]
@@ -409,22 +390,46 @@ if __name__ == '__main__':
         normalize_transform,
         a_pytorch.transforms.ToTensorV2()
     ])
+    
+    TEST_PIPELINE = VALIDATION_PIPELINE    
 
     _num_workers = 8
 
-    train_data = CustomImageTextFolder(root=None, custom_samples=train_data,
-                                       transform=Transforms(img_transf=TRAIN_PIPELINE))
+    aux = [DATASET_NAME, TRAIN_DATASET_PATH]
+    dataset_folder = '_'.join(aux)
+    train_data = CustomImageTextFolder(
+        root=os.path.join(BASE_PATH,dataset_folder),
+        transform=Transforms(img_transf=TRAIN_PIPELINE))
 
-    val_data = CustomImageTextFolder(root=None, custom_samples=val_data,
-                                     transform=Transforms(img_transf=VALIDATION_PIPELINE))
+    aux = [DATASET_NAME, VAL_DATASET_PATH]
+    dataset_folder = '_'.join(aux)
+    val_data = CustomImageTextFolder(
+        root=os.path.join(BASE_PATH,dataset_folder),
+        transform=Transforms(img_transf=VALIDATION_PIPELINE))
+
+    aux = [DATASET_NAME, VAL_DATASET_PATH]
+    dataset_folder = '_'.join(aux)
+    test_data = CustomImageTextFolder(
+        root=os.path.join(BASE_PATH,dataset_folder),
+        transform=Transforms(img_transf=TEST_PIPELINE))
 
     data_loader_train = torch.utils.data.DataLoader(dataset=train_data,
                                                     batch_size=_batch_size,
-                                                    shuffle=True, num_workers=_num_workers, pin_memory=True)
+                                                    shuffle=True,
+                                                    num_workers=_num_workers,
+                                                    pin_memory=True)
 
     data_loader_val = torch.utils.data.DataLoader(dataset=val_data,
                                                   batch_size=_batch_size,
-                                                  shuffle=True, num_workers=_num_workers, pin_memory=True)
+                                                  shuffle=True,
+                                                  num_workers=_num_workers,
+                                                  pin_memory=True)
+    
+    data_loader_test = torch.utils.data.DataLoader(dataset=test_data,
+                                                  batch_size=_batch_size,
+                                                  shuffle=True,
+                                                  num_workers=_num_workers,
+                                                  pin_memory=True)    
 
     train_loss_history = []
     train_accuracy_history = []
@@ -443,7 +448,7 @@ if __name__ == '__main__':
 
     print("Starting training...")
     global_model.to(device)
-    max_val_accuracy = 0.0
+    max_test_accuracy = 0.0
     best_epoch = 0
 
     for epoch in range(args.epochs):
@@ -492,7 +497,6 @@ if __name__ == '__main__':
         train_accuracy_history.append(train_accuracy)
 
         print("Starting val accuracy calculation for epoch {}".format(epoch))
-        print(all_data_img_folder.class_to_idx)
         val_accuracy = calculate_set_accuracy(global_model,
                                               data_loader_val,
                                               len(data_loader_val.dataset),
@@ -504,29 +508,28 @@ if __name__ == '__main__':
         print("Val set accuracy on epoch {}: {:.3f}".format(epoch, val_accuracy))
         val_accuracy_history.append(val_accuracy)
         
-        # print("Starting test accuracy calculation for epoch {}".format(epoch))
-        # print(all_data_img_folder.class_to_idx)
-        # test_accuracy = calculate_set_accuracy(global_model,
-        #                                       data_loader_test,
-        #                                       len(data_loader_test.dataset),
-        #                                       device,
-        #                                       _batch_size)
+        print("Starting test accuracy calculation for epoch {}".format(epoch))
+        test_accuracy = calculate_set_accuracy(global_model,
+                                              data_loader_test,
+                                              len(data_loader_test.dataset),
+                                              device,
+                                              _batch_size)
 
-        # # wandb.log({'val_accuracy_history': val_accuracy_history,  'epoch': epoch})
+        # wandb.log({'val_accuracy_history': val_accuracy_history,  'epoch': epoch})
 
-        # print("Train set accuracy on epoch {}: {:.3f}".format(epoch, val_accuracy))
-        # test_accuracy_history.append(test_accuracy)
+        print("Train set accuracy on epoch {}: {:.3f}".format(epoch, val_accuracy))
+        test_accuracy_history.append(test_accuracy)
         
 
-        if val_accuracy > max_val_accuracy:
-            print("Best model obtained based on Val Acc. Saving it!")
+        if test_accuracy > max_test_accuracy:
+            print("Best model obtained based on Test Acc. Saving it!")
             save_model_weights(global_model, args.image_model,
                                epoch, val_accuracy, device, False, args.balance_weights, args.opt)
-            max_val_accuracy = val_accuracy
+            max_test_accuracy = test_accuracy
             best_epoch = epoch
         else:
-            print("Not saving model on epoch {}, best Val Acc so far on epoch {}: {:.3f}".format(epoch, best_epoch,
-                                                                                                 max_val_accuracy))
+            print("Not saving model on epoch {}, best Test Acc so far on epoch {}: {:.3f}".format(epoch, best_epoch,
+                                                                                                 max_test_accuracy))
 
     print("Starting Fine tuning!!")
     # Fine tuning loop
@@ -588,7 +591,6 @@ if __name__ == '__main__':
 
             print(
                 "Fine Tuning: starting validation accuracy calculation for epoch {}".format(epoch))
-            print(all_data_img_folder.class_to_idx)
             val_accuracy = calculate_set_accuracy(global_model,
                                                   data_loader_val,
                                                   len(val_data),
@@ -599,28 +601,27 @@ if __name__ == '__main__':
 
             val_accuracy_history.append(val_accuracy)
             
-            # print(
-            #     "Fine Tuning: starting test accuracy calculation for epoch {}".format(epoch))
-            # print(all_data_img_folder.class_to_idx)
-            # test_accuracy = calculate_set_accuracy(global_model,
-            #                                       data_loader_test,
-            #                                       len(data_loader_test.dataset),
-            #                                       device,
-            #                                       _batch_size)
-            # print("Fine Tuning: Test set accuracy on epoch {}: {:.3f}".format(
-            #     epoch, test_accuracy))
+            print(
+                "Fine Tuning: starting test accuracy calculation for epoch {}".format(epoch))
+            test_accuracy = calculate_set_accuracy(global_model,
+                                                  data_loader_test,
+                                                  len(data_loader_test.dataset),
+                                                  device,
+                                                  _batch_size)
+            print("Fine Tuning: Test set accuracy on epoch {}: {:.3f}".format(
+                epoch, test_accuracy))
 
-            # test_accuracy_history.append(test_accuracy)
+            test_accuracy_history.append(test_accuracy)
 
-            if val_accuracy > max_val_accuracy:
-                print("Fine Tuning: best model obtained based on Val Acc. Saving it!")
+            if test_accuracy > max_test_accuracy:
+                print("Fine Tuning: best model obtained based on Test Acc. Saving it!")
                 save_model_weights(global_model, args.image_model,
                                    epoch, val_accuracy, device, True, args.balance_weights, args.opt)
                 best_epoch = epoch
-                max_val_accuracy = val_accuracy
+                max_test_accuracy = test_accuracy
             else:
-                print("Fine Tuning: not saving model, best Val Acc so far on epoch {}: {:.3f}".format(best_epoch,
-                                                                                                      max_val_accuracy))
+                print("Fine Tuning: not saving model, best Test Acc so far on epoch {}: {:.3f}".format(best_epoch,
+                                                                                                      max_test_accuracy))
 
     # Finished training, save data
     with open(BASE_PATH + 'save/train_loss_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
@@ -641,11 +642,11 @@ if __name__ == '__main__':
         write = csv.writer(f)
         write.writerow(map(lambda x: x, val_accuracy_history))
         
-    # with open(BASE_PATH + 'save/test_acc_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
-    #         args.image_model, args.lr, args.reg, args.balance_weights), 'w') as f:
+    with open(BASE_PATH + 'save/test_acc_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
+            args.image_model, args.lr, args.reg, args.balance_weights), 'w') as f:
 
-    #     write = csv.writer(f)
-    #     write.writerow(map(lambda x: x, train_accuracy_history))        
+        write = csv.writer(f)
+        write.writerow(map(lambda x: x, train_accuracy_history))
 
     # Plot train loss
     train_loss_history = torch.FloatTensor(train_loss_history).cpu()
@@ -679,14 +680,14 @@ if __name__ == '__main__':
         BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_val_accuracy.png'.format(
             args.image_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
     
-    # # Plot test accuracy
-    # plt.figure()
-    # plt.plot(range(len(test_accuracy_history)), test_accuracy_history)
-    # plt.xlabel('Epochs')
-    # plt.ylabel('Test accuracy per Epoch')
-    # plt.title('Model: {}'.format(args.image_model))
-    # plt.savefig(
-    #     BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_val_accuracy.png'.format(
-    #         args.image_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))    
+    # Plot test accuracy
+    plt.figure()
+    plt.plot(range(len(test_accuracy_history)), test_accuracy_history)
+    plt.xlabel('Epochs')
+    plt.ylabel('Test accuracy per Epoch')
+    plt.title('Model: {}'.format(args.image_model))
+    plt.savefig(
+        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_test_accuracy.png'.format(
+            args.image_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))    
 
     # run.finish()
