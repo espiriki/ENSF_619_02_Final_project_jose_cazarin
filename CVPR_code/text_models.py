@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
-from transformers import BertModel, DistilBertModel, RobertaModel
-from transformers import BertConfig, DistilBertConfig, RobertaConfig
+from transformers import BertModel, DistilBertModel, RobertaModel, BartForSequenceClassification
+from transformers import BertConfig, DistilBertConfig, RobertaConfig, BartConfig
 from torchvision.models import *
-from transformers import BertTokenizer, DistilBertTokenizer, RobertaTokenizer
+from transformers import BertTokenizer, DistilBertTokenizer, RobertaTokenizer, BartTokenizer
 
 
 class DistilBert(nn.Module):
@@ -102,4 +102,30 @@ class Bert(nn.Module):
     def get_max_token_size(self):
         return BertConfig().max_position_embeddings
     
-# class Bart(nn.Module):    
+class Bart(nn.Module):
+    def __init__(self, n_classes, drop_ratio):
+        super(Bart, self).__init__()
+        self.name = "facebook/bart-large"
+        self.model = BartForSequenceClassification.from_pretrained(self.name)
+
+        # Freeze all layers for TL
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        self.model.classification_head.dropout = nn.Dropout(p=drop_ratio)
+        self.model.classification_head.out_proj = \
+            nn.Linear(self.model.classification_head.dense.out_features, n_classes)
+
+    def forward(self, _input_ids, _attention_mask):
+        bart_output = self.model(
+            input_ids=_input_ids,
+            attention_mask=_attention_mask
+        )
+
+        return bart_output[0]
+    
+    def get_tokenizer(self):
+        return BartTokenizer.from_pretrained(self.name)
+
+    def get_max_token_size(self):
+        return BartConfig().max_position_embeddings

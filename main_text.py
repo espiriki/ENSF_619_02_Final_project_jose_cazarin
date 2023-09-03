@@ -234,15 +234,22 @@ if __name__ == '__main__':
     global_model = DistilBert(_num_classes, args.model_dropout)
     _batch_size = 32
 
+    # 66 365 956
     if args.text_model == "distilbert":
         global_model = DistilBert(_num_classes, args.model_dropout)
         _batch_size = 64
+    # 124 648 708
     elif args.text_model == "roberta":
         global_model = Roberta(_num_classes, args.model_dropout)
         _batch_size = 32
+    # 109 485 316
     elif args.text_model == "bert":
         global_model = Bert(_num_classes, args.model_dropout)
-        _batch_size = 32        
+        _batch_size = 32
+    # 407 345 156 parameters
+    elif args.text_model == "bart":
+        global_model = Bart(_num_classes, args.model_dropout)
+        _batch_size = 4
     else:
         print("Invalid Model: {}".format(args.text_model))
         sys.exit(1)
