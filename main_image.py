@@ -193,21 +193,19 @@ def calculate_mean_std_train_dataset(train_dataset_path, pipeline):
                                                num_workers=8,
                                                pin_memory=True)
 
-    channels_sum, channels_squared_sum, num_batches = 0, 0, 0
+    channels_sum, std_sum, num_batches = 0, 0, 0
 
     for _, (images, _) in enumerate(stats_loader):
+        images = images['image']['raw_image']
 
         channels_sum += torch.mean(images*1.0, dim=[0, 2, 3])
-        channels_squared_sum += torch.mean((images**2)*1.0, dim=[0, 2, 3])
+        std_sum += torch.std(images*1.0, dim=[0, 2, 3])/len(images)
         num_batches += 1
 
     mean = (channels_sum / num_batches)/255
-
-    # std = sqrt(E[X^2] - (E[X])^2)
-    std = (torch.sqrt((channels_squared_sum / num_batches) - mean ** 2))/255
+    std = (std_sum / num_batches)/255
 
     return mean, std
-
 
 def count_parameters(model): return sum(p.numel() for p in model.parameters())
 
