@@ -195,7 +195,7 @@ def calculate_mean_std_train_dataset(train_dataset_path, pipeline):
 
     channels_sum, std_sum, num_batches = 0, 0, 0
 
-    for _, (images, _) in enumerate(stats_loader):
+    for images, _ in stats_loader:
         images = images['image']['raw_image']
 
         channels_sum += torch.mean(images*1.0, dim=[0, 2, 3])
