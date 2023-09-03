@@ -54,13 +54,10 @@ class Roberta(nn.Module):
         self.out = nn.Linear(self.model.config.hidden_size, n_classes)
 
     def forward(self, _input_ids, _attention_mask):
-
-        print("Before model running")
         roberta_output = self.model(
             input_ids=_input_ids,
             attention_mask=_attention_mask
         )
-        print("After model running")
 
         hidden_state = roberta_output[0]
         pooled_output = hidden_state[:, 0]

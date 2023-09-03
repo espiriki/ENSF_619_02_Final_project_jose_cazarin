@@ -343,8 +343,8 @@ if __name__ == '__main__':
             train_dataset_path, STATS_PIPELINE)
     else:
         # Already calculated in another run
-        mean_train_dataset = [0.5558, 0.5318, 0.5029]
-        std_train_dataset = [0.0315, 0.0318, 0.0315]
+        mean_train_dataset = [0.4183, 0.3834, 0.3471]
+        std_train_dataset = [0.0098, 0.0093, 0.0090]
 
     print("Mean Train Dataset: {}, STD Train Dataset: {}".format(
         mean_train_dataset, std_train_dataset))
