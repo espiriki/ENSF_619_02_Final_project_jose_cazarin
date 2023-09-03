@@ -52,7 +52,6 @@ eff_net_sizes = {
 }
 
 BASE_PATH = "/project/def-rmsouza/jocazar/"
-DATASET_NAME="winter_2023_dataset_with_text_original_resized"
 TRAIN_DATASET_PATH="train_set"
 VAL_DATASET_PATH="val_set"
 TEST_DATASET_PATH="test_set"
@@ -332,7 +331,7 @@ if __name__ == '__main__':
         a_pytorch.transforms.ToTensorV2()
     ])
 
-    aux = [DATASET_NAME, TRAIN_DATASET_PATH]
+    aux = [args.dataset_folder_name, TRAIN_DATASET_PATH]
     dataset_folder = '_'.join(aux)
     train_dataset_path = root=os.path.join(BASE_PATH, dataset_folder)
 
@@ -393,25 +392,25 @@ if __name__ == '__main__':
     
     TEST_PIPELINE = VALIDATION_PIPELINE    
 
-    _num_workers = 8
-
-    aux = [DATASET_NAME, TRAIN_DATASET_PATH]
+    aux = [args.dataset_folder_name, TRAIN_DATASET_PATH]
     dataset_folder = '_'.join(aux)
     train_data = CustomImageTextFolder(
         root=os.path.join(BASE_PATH,dataset_folder),
         transform=Transforms(img_transf=TRAIN_PIPELINE))
 
-    aux = [DATASET_NAME, VAL_DATASET_PATH]
+    aux = [args.dataset_folder_name, VAL_DATASET_PATH]
     dataset_folder = '_'.join(aux)
     val_data = CustomImageTextFolder(
         root=os.path.join(BASE_PATH,dataset_folder),
         transform=Transforms(img_transf=VALIDATION_PIPELINE))
 
-    aux = [DATASET_NAME, VAL_DATASET_PATH]
+    aux = [args.dataset_folder_name, VAL_DATASET_PATH]
     dataset_folder = '_'.join(aux)
     test_data = CustomImageTextFolder(
         root=os.path.join(BASE_PATH,dataset_folder),
         transform=Transforms(img_transf=TEST_PIPELINE))
+
+    _num_workers = 8
 
     data_loader_train = torch.utils.data.DataLoader(dataset=train_data,
                                                     batch_size=_batch_size,
@@ -430,6 +429,13 @@ if __name__ == '__main__':
                                                   shuffle=True,
                                                   num_workers=_num_workers,
                                                   pin_memory=True)    
+
+
+    print(f"Total num of train images: {len(train_data)}")
+    for i in range(_num_classes):
+        len_samples = len(train_data.per_class[i])
+        print("Num of samples for class {}: {}. Percentage of dataset: {:.2f}".format(
+            i, len_samples, (len_samples/len(train_data))*100))
 
     train_loss_history = []
     train_accuracy_history = []

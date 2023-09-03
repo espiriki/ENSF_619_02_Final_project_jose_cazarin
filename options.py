@@ -10,8 +10,8 @@ def args_parser():
 
     parser.add_argument('--epochs', type=int, default=100,
                         help="number of rounds of training")
-    parser.add_argument('--dataset_path', type=str, default="",
-                        help="dataset location")                        
+    parser.add_argument('--dataset_folder_name', type=str, default="",
+                        help="dataset folder name in the base location")                        
     parser.add_argument('--lr', type=float, default=0.001,
                         help='learning rate')
     parser.add_argument('--reg', type=float, default=1e-2,

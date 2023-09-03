@@ -31,6 +31,9 @@ from sklearn.model_selection import train_test_split as tts
 _num_classes = 4
 
 BASE_PATH = "/project/def-rmsouza/jocazar/"
+TRAIN_DATASET_PATH="train_set"
+VAL_DATASET_PATH="val_set"
+TEST_DATASET_PATH="test_set"
 
 class Transforms:
     def __init__(self, img_transf: A.Compose):
@@ -44,7 +47,7 @@ class Transforms:
 
 
 # Just to avoid errors in the loader
-def get_image_pipeline():
+def get_dummy_pipeline():
     pipeline = A.Compose([
         A.Resize(width=320,
                  height=320,
@@ -53,6 +56,26 @@ def get_image_pipeline():
     ])
 
     return pipeline
+
+
+def get_class_weights(train_dataset_path):
+    
+    train_set = CustomImageTextFolder(train_dataset_path)
+    
+    total_num_samples_dataset = 0.0
+    num_samples_each_class = []
+    for i in range(_num_classes):
+        num_samples_each_class.append(len(train_set.per_class[i]))
+        total_num_samples_dataset +=(len(train_set.per_class[i]))
+      
+    class_weights = []
+
+    for i in range(_num_classes):
+        class_weight = total_num_samples_dataset / \
+            (_num_classes * num_samples_each_class[i])
+        class_weights.append(class_weight)
+        
+    return class_weights
 
 
 def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
@@ -146,7 +169,7 @@ def calculate_set_accuracy(
 def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tuning, class_weights, opt):
 
     if fine_tuning:
-        base_name = BASE_PATH+"model_weights/BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_FractionLR_{}_Opt_{}_VAL_ACC_{:.3f}_".format(
+        base_name = BASE_PATH+"model_weights/BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_FractionLR_{}_OPT_{}_VAL_ACC_{:.3f}_".format(
             model_name, epoch_num+1, args.lr, args.reg, args.fraction_lr, opt, val_acc)
 
     else:
@@ -241,81 +264,65 @@ if __name__ == '__main__':
         print("Using {} GPUs".format(torch.cuda.device_count()))
         global_model = nn.DataParallel(global_model)
 
+    aux = [args.dataset_folder_name, TRAIN_DATASET_PATH]
+    dataset_folder = '_'.join(aux)
+    train_dataset_path = root=os.path.join(BASE_PATH, dataset_folder)
+
+    class_weights = get_class_weights(train_dataset_path)
+    print("Class weights: {}".format(class_weights))
+
     _tokenizer = global_model.get_tokenizer()
     _max_len = global_model.get_max_token_size()
-    all_data_text_folder = CustomImageTextFolder(
-        root=args.dataset_path,
+
+    aux = [args.dataset_folder_name, TRAIN_DATASET_PATH]
+    dataset_folder = '_'.join(aux)
+    train_data = CustomImageTextFolder(
+        root=os.path.join(BASE_PATH,dataset_folder),
         tokens_max_len=_max_len,
         tokenizer_text=_tokenizer,
-        transform=Transforms(img_transf=get_image_pipeline()),
-    )
+        transform=Transforms(img_transf=get_dummy_pipeline()))
 
-    print(f"Total num of texts: {len(all_data_text_folder)}")
-    for i in range(_num_classes):
-        len_samples = len(all_data_text_folder.per_class[i])
-        print("Num of samples for class {}: {}. Percentage of dataset: {:.2f}".format(
-            i, len_samples, (len_samples/len(all_data_text_folder))*100))
+    aux = [args.dataset_folder_name, VAL_DATASET_PATH]
+    dataset_folder = '_'.join(aux)
+    val_data = CustomImageTextFolder(
+        root=os.path.join(BASE_PATH,dataset_folder),
+        tokens_max_len=_max_len,
+        tokenizer_text=_tokenizer,
+        transform=Transforms(img_transf=get_dummy_pipeline()))
 
-    # 80% for training
-    TEST_VALIDATION_SPLIT = 0.80
-
-    X_train_set, X_val_plus_test_set, Y_train_set, Y_val_plus_test_set = tts(
-        all_data_text_folder,
-        all_data_text_folder.targets,
-        test_size=1-(TEST_VALIDATION_SPLIT),
-        stratify=all_data_text_folder.targets
-    )
-
-    X_validation_set, X_test_set, Y_validation_set, Y_test_set = tts(
-        X_val_plus_test_set,
-        Y_val_plus_test_set,
-        # From the rest, evenly divide between val and test set
-        test_size=0.5,
-        stratify=Y_val_plus_test_set,
-    )
-
-    sets = [Y_train_set, Y_validation_set, Y_test_set]
-    sets_names = ["Train", "Validation", "Test"]
-    class_weights = []
-
-    num_samples_each_class = np.unique(Y_train_set, return_counts=True)[1]
-    total_num_samples_dataset = np.sum(num_samples_each_class)
-
-    for i in range(_num_classes):
-        class_weight = total_num_samples_dataset / \
-            (_num_classes * num_samples_each_class[i])
-        class_weights.append(class_weight)
-
-    for set, set_name in zip(sets, sets_names):
-        print("{} set num of samples: {}".format(
-            set_name, total_num_samples_dataset))
-        for i in range(_num_classes):
-            print("    {} set percentage of class {}: {:.2f}".format(
-                set_name,
-                get_keys_from_value(all_data_text_folder.class_to_idx, i),
-                100*(num_samples_each_class[i]/total_num_samples_dataset)))
-
-    print("Class weights: {}".format(class_weights))
+    aux = [args.dataset_folder_name, VAL_DATASET_PATH]
+    dataset_folder = '_'.join(aux)
+    test_data = CustomImageTextFolder(
+        root=os.path.join(BASE_PATH,dataset_folder),
+        tokens_max_len=_max_len,
+        tokenizer_text=_tokenizer,
+        transform=Transforms(img_transf=get_dummy_pipeline()))
 
     _num_workers = 8
 
-    data_loader_train = torch.utils.data.DataLoader(dataset=X_train_set,
+    data_loader_train = torch.utils.data.DataLoader(dataset=train_data,
                                                     batch_size=_batch_size,
                                                     shuffle=True,
                                                     num_workers=_num_workers,
                                                     pin_memory=True)
 
-    data_loader_val = torch.utils.data.DataLoader(dataset=X_validation_set,
+    data_loader_val = torch.utils.data.DataLoader(dataset=val_data,
                                                   batch_size=_batch_size,
                                                   shuffle=True,
                                                   num_workers=_num_workers,
                                                   pin_memory=True)
 
-    data_loader_test = torch.utils.data.DataLoader(dataset=X_test_set,
+    data_loader_test = torch.utils.data.DataLoader(dataset=test_data,
                                                   batch_size=_batch_size,
                                                   shuffle=True,
                                                   num_workers=_num_workers,
                                                   pin_memory=True)                                                  
+
+    print(f"Total num of texts: {len(train_data)}")
+    for i in range(_num_classes):
+        len_samples = len(train_data.per_class[i])
+        print("Num of samples for class {}: {}. Percentage of dataset: {:.2f}".format(
+            i, len_samples, (len_samples/len(train_data))*100))
 
     train_loss_history = []
     train_accuracy_history = []
@@ -397,7 +404,6 @@ if __name__ == '__main__':
         val_accuracy_history.append(val_accuracy)
 
         print("Starting test accuracy calculation for epoch {}".format(epoch))
-        print(all_data_text_folder.class_to_idx)
         test_accuracy = calculate_set_accuracy(global_model,
                                               data_loader_test,
                                               len(data_loader_test.dataset),
@@ -479,7 +485,6 @@ if __name__ == '__main__':
 
             print(
                 "Fine Tuning: starting val accuracy calculation for epoch {}".format(epoch))
-            print(all_data_text_folder.class_to_idx)
             val_accuracy = calculate_set_accuracy(global_model,
                                                   data_loader_val,
                                                   len(data_loader_val.dataset),
