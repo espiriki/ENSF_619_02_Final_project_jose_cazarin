@@ -354,6 +354,30 @@ if __name__ == '__main__':
     normalize_transform = A.Normalize(mean=mean_train_dataset,
                                       std=std_train_dataset, always_apply=True)
 
+    if args.calculate_dataset_stats is True:
+
+        print("Calculating Train Dataset statistics after normalization...")
+        STATS_PIPELINE_AFTER = A.Compose([
+            A.Resize(width=WIDTH,
+                        height=HEIGHT,
+                        interpolation=cv2.INTER_LINEAR),
+            normalize_transform,
+            a_pytorch.transforms.ToTensorV2()
+        ])
+        mean_train_dataset_after, std_train_dataset_after = \
+        calculate_mean_std_train_dataset(train_dataset_path, STATS_PIPELINE_AFTER)
+
+        mean_train_dataset_after = mean_train_dataset_after * 255
+        std_train_dataset_after = std_train_dataset_after * 255
+
+        print("Mean Train Dataset AFTER: {}, STD Train Dataset AFTER: {}".format(
+            mean_train_dataset_after, std_train_dataset_after))
+
+        np.testing.assert_allclose(mean_train_dataset_after,
+                        [0.0, 0.0, 0.0], atol=1e-2)
+        np.testing.assert_allclose(std_train_dataset_after,
+                        [1.0, 1.0, 1.0], atol=1e-2)
+
     TRAIN_PIPELINE = A.Compose([
         A.Rotate(p=prob_augmentations, interpolation=cv2.INTER_LINEAR,
                  border_mode=cv2.BORDER_CONSTANT,
