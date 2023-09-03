@@ -188,7 +188,7 @@ def calculate_mean_std_train_dataset(train_dataset_path, pipeline):
                                              transform=Transforms(img_transf=pipeline))
 
     stats_loader = torch.utils.data.DataLoader(dataset=stats_train_data,
-                                               batch_size=32,
+                                               batch_size=128,
                                                shuffle=True,
                                                num_workers=8,
                                                pin_memory=True)
