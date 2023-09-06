@@ -18,7 +18,7 @@ import albumentations as A
 import cv2
 import albumentations.pytorch as a_pytorch
 import numpy as np
-# import wandb
+import wandb
 import torch.nn as nn
 import itertools
 import time
@@ -223,19 +223,6 @@ if __name__ == '__main__':
     if args.tl is True:
         print("In Transfer Learning mode!!!")
 
-    config = dict(
-        learning_rate=args.lr,
-        architecture=args.image_model,
-        regularization=args.reg,
-        num_epochs=args.epochs,
-        dataset_id="garbage",
-    )
-
-    # run = wandb.init(
-    #     project="Garbage Classification",
-    #     config=config,
-    # )
-
     # This is to make results predictable, when splitting the dataset into train/val/test
     torch.manual_seed(42)
 
@@ -312,7 +299,27 @@ if __name__ == '__main__':
         print("Training for {} fine tuning epochs".format(args.ft_epochs))
         print("Fraction of the LR for fine tuning: {}".format(args.fraction_lr))
 
-    # wandb.watch(global_model)
+    config = dict(
+        num_model_parameters=count_parameters(global_model),
+        batch_size=_batch_size,
+        learning_rate=args.lr,
+        regularization=args.reg,
+        balance_weights=args.balance_weights,
+        optimizer=args.opt,
+        batch_acc_steps=args.acc_steps,
+        num_epochs=args.epochs,
+        fine_tuning_epochs=args.ft_epochs,
+        fraction_lr=args.fraction_lr,
+        architecture=args.image_model,
+        dataset_id="garbage",
+    )
+
+    run = wandb.init(
+        project="Garbage Classification Image",
+        config=config,
+    )
+
+    wandb.watch(global_model)
 
     if torch.cuda.device_count() > 1:
         print("Using {} GPUs".format(torch.cuda.device_count()))
@@ -501,8 +508,6 @@ if __name__ == '__main__':
         train_loss_avg = np.average(train_loss_per_batch)
         train_loss_history.append(train_loss_avg)
 
-        # wandb.log({'train_loss_avg': train_loss_avg,  'epoch': epoch})
-
         print("Avg train loss on epoch {}: {:.3f}".format(epoch, train_loss_avg))
         print("Max train loss on epoch {}: {:.3f}".format(
             epoch, np.max(train_loss_per_batch)))
@@ -518,8 +523,6 @@ if __name__ == '__main__':
                                                 device,
                                                 _batch_size)
 
-        # wandb.log({'train_accuracy_history': train_accuracy,  'epoch': epoch})
-
         print("Train set accuracy on epoch {}: {:.3f} ".format(
             epoch, train_accuracy))
         train_accuracy_history.append(train_accuracy)
@@ -531,8 +534,6 @@ if __name__ == '__main__':
                                               device,
                                               _batch_size)
 
-        # wandb.log({'val_accuracy_history': val_accuracy_history,  'epoch': epoch})
-
         print("Val set accuracy on epoch {}: {:.3f}".format(epoch, val_accuracy))
         val_accuracy_history.append(val_accuracy)
         
@@ -543,11 +544,15 @@ if __name__ == '__main__':
                                               device,
                                               _batch_size)
 
-        # wandb.log({'val_accuracy_history': val_accuracy_history,  'epoch': epoch})
-
         print("Train set accuracy on epoch {}: {:.3f}".format(epoch, val_accuracy))
         test_accuracy_history.append(test_accuracy)
         
+        wandb.log({'epoch': epoch,
+                   'epoch_time_seconds': elapsed_time,
+                   'train_loss_avg': train_loss_avg,
+                   'train_accuracy_history': train_accuracy,
+                   'val_accuracy_history': val_accuracy,
+                   'test_accuracy_history': test_accuracy})
 
         if test_accuracy > max_test_accuracy:
             print("Best model obtained based on Test Acc. Saving it!")
@@ -589,18 +594,16 @@ if __name__ == '__main__':
             elapsed_time = time.time() - st
             print('Fine Tuning: epoch time: {:.1f}'.format(elapsed_time))
 
-            ft_train_loss_avg = np.average(ft_train_loss_per_batch)
-
-            # wandb.log({'train_loss_avg': train_loss_avg,  'epoch': epoch})
+            train_loss_avg = np.average(ft_train_loss_per_batch)
 
             print("Fine Tuning: avg train loss on epoch {}: {:.3f}".format(
-                epoch, ft_train_loss_avg))
+                epoch, train_loss_avg))
             print("Fine Tuning: max train loss on epoch {}: {:.3f}".format(
                 epoch, np.max(ft_train_loss_per_batch)))
             print("Fine Tuning: min train loss on epoch {}: {:.3f}".format(
                 epoch, np.min(ft_train_loss_per_batch)))
 
-            train_loss_history.append(ft_train_loss_avg)
+            train_loss_history.append(train_loss_avg)
             global_model.eval()
 
             print(
@@ -610,8 +613,6 @@ if __name__ == '__main__':
                                                     len(train_data),
                                                     device,
                                                     _batch_size)
-
-            # wandb.log({'train_accuracy_history': train_accuracy,  'epoch': epoch})
 
             print("Fine Tuning: train set accuracy on epoch {}: {:.3f} ".format(
                 epoch, train_accuracy))
@@ -624,6 +625,7 @@ if __name__ == '__main__':
                                                   len(val_data),
                                                   device,
                                                   _batch_size)
+            
             print("Fine Tuning: Val set accuracy on epoch {}: {:.3f}".format(
                 epoch, val_accuracy))
 
@@ -636,10 +638,18 @@ if __name__ == '__main__':
                                                   len(data_loader_test.dataset),
                                                   device,
                                                   _batch_size)
+            
             print("Fine Tuning: Test set accuracy on epoch {}: {:.3f}".format(
                 epoch, test_accuracy))
 
             test_accuracy_history.append(test_accuracy)
+
+            wandb.log({'epoch': epoch,
+                   'epoch_time_seconds': elapsed_time,
+                   'train_loss_avg': train_loss_avg,
+                   'train_accuracy_history': train_accuracy,
+                   'val_accuracy_history': val_accuracy,
+                   'test_accuracy_history': test_accuracy})
 
             if test_accuracy > max_test_accuracy:
                 print("Fine Tuning: best model obtained based on Test Acc. Saving it!")
@@ -718,4 +728,4 @@ if __name__ == '__main__':
         BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_test_accuracy.png'.format(
             args.image_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))    
 
-    # run.finish()
+    run.finish()
