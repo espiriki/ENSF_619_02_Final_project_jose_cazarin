@@ -32,9 +32,10 @@ from sklearn.metrics import classification_report
 _num_classes = 4
 
 BASE_PATH = "/project/def-rmsouza/jocazar/"
-TRAIN_DATASET_PATH="train_set"
-VAL_DATASET_PATH="val_set"
-TEST_DATASET_PATH="test_set"
+TRAIN_DATASET_PATH = "train_set"
+VAL_DATASET_PATH = "val_set"
+TEST_DATASET_PATH = "test_set"
+
 
 class Transforms:
     def __init__(self, img_transf: A.Compose):
@@ -60,22 +61,22 @@ def get_dummy_pipeline():
 
 
 def get_class_weights(train_dataset_path):
-    
+
     train_set = CustomImageTextFolder(train_dataset_path)
-    
+
     total_num_samples_dataset = 0.0
     num_samples_each_class = []
     for i in range(_num_classes):
         num_samples_each_class.append(len(train_set.per_class[i]))
-        total_num_samples_dataset +=(len(train_set.per_class[i]))
-      
+        total_num_samples_dataset += (len(train_set.per_class[i]))
+
     class_weights = []
 
     for i in range(_num_classes):
         class_weight = total_num_samples_dataset / \
             (_num_classes * num_samples_each_class[i])
         class_weights.append(class_weight)
-        
+
     return class_weights
 
 
@@ -130,8 +131,10 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
 
     return n_batches, batch_loss
 
+
 def flatten(l):
     return [item for sublist in l for item in sublist]
+
 
 def calculate_set_accuracy(
         model,
@@ -166,15 +169,15 @@ def calculate_set_accuracy(
 
             print("Batches {}/{} ".format(batch_idx,
                                           n_batches), end='\r')
-            
+
             all_labels.append(labels.cpu())
-            all_predictions.append(pred_labels.cpu())            
+            all_predictions.append(pred_labels.cpu())
 
         all_labels = flatten(all_labels)
         all_predictions = flatten(all_predictions)
 
-        report = classification_report(all_labels, all_predictions, \
-            target_names=["black","blue","green","ttr"], output_dict=True)
+        report = classification_report(all_labels, all_predictions,
+                                       target_names=["black", "blue", "green", "ttr"], output_dict=True)
 
         print(report)
 
@@ -300,7 +303,7 @@ if __name__ == '__main__':
 
     aux = [args.dataset_folder_name, TRAIN_DATASET_PATH]
     dataset_folder = '_'.join(aux)
-    train_dataset_path = root=os.path.join(BASE_PATH, dataset_folder)
+    train_dataset_path = root = os.path.join(BASE_PATH, dataset_folder)
 
     class_weights = get_class_weights(train_dataset_path)
     print("Class weights: {}".format(class_weights))
@@ -311,7 +314,7 @@ if __name__ == '__main__':
     aux = [args.dataset_folder_name, TRAIN_DATASET_PATH]
     dataset_folder = '_'.join(aux)
     train_data = CustomImageTextFolder(
-        root=os.path.join(BASE_PATH,dataset_folder),
+        root=os.path.join(BASE_PATH, dataset_folder),
         tokens_max_len=_max_len,
         tokenizer_text=_tokenizer,
         transform=Transforms(img_transf=get_dummy_pipeline()))
@@ -319,7 +322,7 @@ if __name__ == '__main__':
     aux = [args.dataset_folder_name, VAL_DATASET_PATH]
     dataset_folder = '_'.join(aux)
     val_data = CustomImageTextFolder(
-        root=os.path.join(BASE_PATH,dataset_folder),
+        root=os.path.join(BASE_PATH, dataset_folder),
         tokens_max_len=_max_len,
         tokenizer_text=_tokenizer,
         transform=Transforms(img_transf=get_dummy_pipeline()))
@@ -327,7 +330,7 @@ if __name__ == '__main__':
     aux = [args.dataset_folder_name, VAL_DATASET_PATH]
     dataset_folder = '_'.join(aux)
     test_data = CustomImageTextFolder(
-        root=os.path.join(BASE_PATH,dataset_folder),
+        root=os.path.join(BASE_PATH, dataset_folder),
         tokens_max_len=_max_len,
         tokenizer_text=_tokenizer,
         transform=Transforms(img_transf=get_dummy_pipeline()))
@@ -347,10 +350,10 @@ if __name__ == '__main__':
                                                   pin_memory=True)
 
     data_loader_test = torch.utils.data.DataLoader(dataset=test_data,
-                                                  batch_size=_batch_size,
-                                                  shuffle=True,
-                                                  num_workers=_num_workers,
-                                                  pin_memory=True)                                                  
+                                                   batch_size=_batch_size,
+                                                   shuffle=True,
+                                                   num_workers=_num_workers,
+                                                   pin_memory=True)
 
     print(f"Total num of texts: {len(train_data)}")
     for i in range(_num_classes):
@@ -407,13 +410,13 @@ if __name__ == '__main__':
             epoch, np.min(train_loss_per_batch)))
 
         global_model.eval()
-        
+
         print("Starting train accuracy calculation for epoch {}".format(epoch))
         train_accuracy, _ = calculate_set_accuracy(global_model,
-                                                data_loader_train,
-                                                len(data_loader_train.dataset),
-                                                device,
-                                                _batch_size)
+                                                   data_loader_train,
+                                                   len(data_loader_train.dataset),
+                                                   device,
+                                                   _batch_size)
 
         print("Train set accuracy on epoch {}: {:.3f} ".format(
             epoch, train_accuracy))
@@ -421,10 +424,10 @@ if __name__ == '__main__':
 
         print("Starting val accuracy calculation for epoch {}".format(epoch))
         val_accuracy, val_report = calculate_set_accuracy(global_model,
-                                                data_loader_val,
-                                                len(data_loader_val.dataset),
-                                                device,
-                                                _batch_size)
+                                                          data_loader_val,
+                                                          len(data_loader_val.dataset),
+                                                          device,
+                                                          _batch_size)
 
         print("Val set accuracy on epoch {}: {:.3f} ".format(
             epoch, val_accuracy))
@@ -445,10 +448,10 @@ if __name__ == '__main__':
                    'train_loss_avg': train_loss_avg,
                    'train_accuracy_history': train_accuracy,
                    'val_accuracy_history': val_accuracy,
-                   'black_val_precision':val_report["black"]["precision"],
-                   'blue_val_precision':val_report["blue"]["precision"],
-                   'green_val_precision':val_report["green"]["precision"],
-                   'ttr_val_precision':val_report["ttr"]["precision"]})
+                   'black_val_precision': val_report["black"]["precision"],
+                   'blue_val_precision': val_report["blue"]["precision"],
+                   'green_val_precision': val_report["green"]["precision"],
+                   'ttr_val_precision': val_report["ttr"]["precision"]})
 
         if val_accuracy > max_val_accuracy:
             print("Best model obtained based on Val Acc. Saving it!")
@@ -505,10 +508,10 @@ if __name__ == '__main__':
             print(
                 "Fine Tuning: starting train accuracy calculation for epoch {}".format(epoch))
             train_accuracy, _ = calculate_set_accuracy(global_model,
-                                                    data_loader_train,
-                                                    len(data_loader_train.dataset),
-                                                    device,
-                                                    _batch_size)
+                                                       data_loader_train,
+                                                       len(data_loader_train.dataset),
+                                                       device,
+                                                       _batch_size)
 
             print("Fine Tuning: train set accuracy on epoch {}: {:.3f} ".format(
                 epoch, train_accuracy))
@@ -517,15 +520,15 @@ if __name__ == '__main__':
             print(
                 "Fine Tuning: starting val accuracy calculation for epoch {}".format(epoch))
             val_accuracy, val_report = calculate_set_accuracy(global_model,
-                                                  data_loader_val,
-                                                  len(data_loader_val.dataset),
-                                                  device,
-                                                  _batch_size)
-                       
+                                                              data_loader_val,
+                                                              len(data_loader_val.dataset),
+                                                              device,
+                                                              _batch_size)
+
             print("Fine Tuning: Val set accuracy on epoch {}: {:.3f}".format(
                 epoch, val_accuracy))
             val_accuracy_history.append(val_accuracy)
-            
+
             # print(
             #     "Fine Tuning: starting test accuracy calculation for epoch {}".format(epoch))
             # test_accuracy = calculate_set_accuracy(global_model,
@@ -533,20 +536,20 @@ if __name__ == '__main__':
             #                                       len(data_loader_test.dataset),
             #                                       device,
             #                                       _batch_size)
-                      
+
             # print("Fine Tuning: Test set accuracy on epoch {}: {:.3f}".format(
-            #     epoch, test_accuracy))            
+            #     epoch, test_accuracy))
             # test_accuracy_history.append(test_accuracy)
 
             wandb.log({'epoch': epoch,
-                   'epoch_time_seconds': elapsed_time,
-                   'train_loss_avg': train_loss_avg,
-                   'train_accuracy_history': train_accuracy,
-                   'val_accuracy_history': val_accuracy,
-                   'black_val_precision':val_report["black"]["precision"],
-                   'blue_val_precision':val_report["blue"]["precision"],
-                   'green_val_precision':val_report["green"]["precision"],
-                   'ttr_val_precision':val_report["ttr"]["precision"]})
+                       'epoch_time_seconds': elapsed_time,
+                       'train_loss_avg': train_loss_avg,
+                       'train_accuracy_history': train_accuracy,
+                       'val_accuracy_history': val_accuracy,
+                       'black_val_precision': val_report["black"]["precision"],
+                       'blue_val_precision': val_report["blue"]["precision"],
+                       'green_val_precision': val_report["green"]["precision"],
+                       'ttr_val_precision': val_report["ttr"]["precision"]})
 
             if val_accuracy > max_val_accuracy:
                 print("Fine Tuning: best model obtained based on Val Acc. Saving it!")
@@ -607,6 +610,6 @@ if __name__ == '__main__':
     plt.title('Model: {}'.format(args.text_model))
     plt.savefig(
         BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_val_accuracy.png'.format(
-           args.text_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
+            args.text_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
 
     run.finish()
