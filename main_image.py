@@ -356,7 +356,7 @@ if __name__ == '__main__':
 
     aux = [args.dataset_folder_name, TRAIN_DATASET_PATH]
     dataset_folder = '_'.join(aux)
-    train_dataset_path = root=os.path.join(BASE_PATH, dataset_folder)
+    train_dataset_path = os.path.join(BASE_PATH, dataset_folder)
 
     class_weights = get_class_weights(train_dataset_path)
 
@@ -489,7 +489,6 @@ if __name__ == '__main__':
     train_loss_history = []
     train_accuracy_history = []
     val_accuracy_history = []
-    test_accuracy_history = []
 
     if args.opt == "adamw":
         optimizer = torch.optim.AdamW(
@@ -706,12 +705,6 @@ if __name__ == '__main__':
 
         write = csv.writer(f)
         write.writerow(map(lambda x: x, val_accuracy_history))
-        
-    with open(BASE_PATH + 'save/test_acc_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
-            args.image_model, args.lr, args.reg, args.balance_weights), 'w') as f:
-
-        write = csv.writer(f)
-        write.writerow(map(lambda x: x, train_accuracy_history))
 
     # Plot train loss
     train_loss_history = torch.FloatTensor(train_loss_history).cpu()
@@ -745,14 +738,4 @@ if __name__ == '__main__':
         BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_val_accuracy.png'.format(
             args.image_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
     
-    # Plot test accuracy
-    plt.figure()
-    plt.plot(range(len(test_accuracy_history)), test_accuracy_history)
-    plt.xlabel('Epochs')
-    plt.ylabel('Test accuracy per Epoch')
-    plt.title('Model: {}'.format(args.image_model))
-    plt.savefig(
-        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_test_accuracy.png'.format(
-            args.image_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))    
-
     run.finish()
