@@ -25,6 +25,7 @@ import time
 from CVPR_code.CustomImageTextFolder import *
 from torchmetrics.classification import ConfusionMatrix
 import ssl
+from sklearn.metrics import classification_report
 
 _num_classes = 4
 
@@ -122,6 +123,8 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
 
     return n_batches, batch_loss
 
+def flatten(l):
+    return [item for sublist in l for item in sublist]
 
 def calculate_set_accuracy(
         model,
@@ -131,6 +134,9 @@ def calculate_set_accuracy(
         batch_size):
 
     n_batches = math.ceil((len_data/batch_size))
+
+    all_labels = []
+    all_predictions = []
 
     with torch.no_grad():
 
@@ -152,20 +158,32 @@ def calculate_set_accuracy(
             print("Batches {}/{} ".format(batch_idx,
                                           n_batches), end='\r')
 
+            all_labels.append(labels.cpu())
+            all_predictions.append(pred_labels.cpu())
+    
+
+        all_labels = flatten(all_labels)
+        all_predictions = flatten(all_predictions)
+        
+        report = classification_report(all_labels, all_predictions, \
+            target_names=["black","blue","green","ttr"], output_dict=True)
+
+        print(report)
+
         acc = 100 * (correct/len_data)
         print("Set acc: ", acc)
-        return acc
+        return acc, report
 
 
 def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tuning, class_weights, opt):
 
     if fine_tuning:
-        base_name = "model_weights/BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_Opt_{}_FractionLR_{}_TEST_ACC_{:.3f}_".format(
+        base_name = "model_weights/BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_Opt_{}_FractionLR_{}_VAL_ACC_{:.3f}_".format(
             model_name, epoch_num+1, args.lr, args.reg, opt, args.fraction_lr, val_acc)
 
     else:
 
-        base_name = "model_weights/BEST_model_{}_epoch_{}_LR_{}_Reg_{}_Opt_{}_TEST_ACC_{:.3f}_".format(
+        base_name = "model_weights/BEST_model_{}_epoch_{}_LR_{}_Reg_{}_Opt_{}_VAL_ACC_{:.3f}_".format(
             model_name, epoch_num+1, args.lr, args.reg, opt, val_acc)
 
     base_name = base_name + "class_weights_{}".format(class_weights)
@@ -440,6 +458,8 @@ if __name__ == '__main__':
         transform=Transforms(img_transf=TEST_PIPELINE))
 
     _num_workers = 8
+    
+    print(train_data.class_to_idx)
 
     data_loader_train = torch.utils.data.DataLoader(dataset=train_data,
                                                     batch_size=_batch_size,
@@ -483,7 +503,7 @@ if __name__ == '__main__':
 
     print("Starting training...")
     global_model.to(device)
-    max_test_accuracy = 0.0
+    max_val_accuracy = 0.0
     best_epoch = 0
 
     for epoch in range(args.epochs):
@@ -517,52 +537,55 @@ if __name__ == '__main__':
         global_model.eval()
 
         print("Starting train accuracy calculation for epoch {}".format(epoch))
-        train_accuracy = calculate_set_accuracy(global_model,
-                                                data_loader_train,
-                                                len(data_loader_train.dataset),
-                                                device,
-                                                _batch_size)
+        train_accuracy, _ = calculate_set_accuracy(global_model,
+                                                    data_loader_train,
+                                                    len(data_loader_train.dataset),
+                                                    device,
+                                                    _batch_size)
 
         print("Train set accuracy on epoch {}: {:.3f} ".format(
             epoch, train_accuracy))
         train_accuracy_history.append(train_accuracy)
 
         print("Starting val accuracy calculation for epoch {}".format(epoch))
-        val_accuracy = calculate_set_accuracy(global_model,
-                                              data_loader_val,
-                                              len(data_loader_val.dataset),
-                                              device,
-                                              _batch_size)
+        val_accuracy, val_report = calculate_set_accuracy(global_model,
+                                                data_loader_val,
+                                                len(data_loader_val.dataset),
+                                                device,
+                                                _batch_size)
 
         print("Val set accuracy on epoch {}: {:.3f}".format(epoch, val_accuracy))
         val_accuracy_history.append(val_accuracy)
         
-        print("Starting test accuracy calculation for epoch {}".format(epoch))
-        test_accuracy = calculate_set_accuracy(global_model,
-                                              data_loader_test,
-                                              len(data_loader_test.dataset),
-                                              device,
-                                              _batch_size)
+        # print("Starting test accuracy calculation for epoch {}".format(epoch))
+        # test_accuracy, _ = calculate_set_accuracy(global_model,
+        #                                       data_loader_test,
+        #                                       len(data_loader_test.dataset),
+        #                                       device,
+        #                                       _batch_size)
 
-        print("Train set accuracy on epoch {}: {:.3f}".format(epoch, val_accuracy))
-        test_accuracy_history.append(test_accuracy)
+        # print("Train set accuracy on epoch {}: {:.3f}".format(epoch, val_accuracy))
+        # test_accuracy_history.append(test_accuracy)
         
         wandb.log({'epoch': epoch,
                    'epoch_time_seconds': elapsed_time,
                    'train_loss_avg': train_loss_avg,
                    'train_accuracy_history': train_accuracy,
                    'val_accuracy_history': val_accuracy,
-                   'test_accuracy_history': test_accuracy})
+                   'black_val_precision':val_report["black"]["precision"],
+                   'blue_val_precision':val_report["blue"]["precision"],
+                   'green_val_precision':val_report["green"]["precision"],
+                   'ttr_val_precision':val_report["ttr"]["precision"]})
 
-        if test_accuracy > max_test_accuracy:
-            print("Best model obtained based on Test Acc. Saving it!")
+        if val_accuracy > max_val_accuracy:
+            print("Best model obtained based on Val Acc. Saving it!")
             save_model_weights(global_model, args.image_model,
                                epoch, val_accuracy, device, False, args.balance_weights, args.opt)
-            max_test_accuracy = test_accuracy
+            max_val_accuracy = val_accuracy
             best_epoch = epoch
         else:
-            print("Not saving model on epoch {}, best Test Acc so far on epoch {}: {:.3f}".format(epoch, best_epoch,
-                                                                                                 max_test_accuracy))
+            print("Not saving model on epoch {}, best Val Acc so far on epoch {}: {:.3f}".format(epoch, best_epoch,
+                                                                                                 max_val_accuracy))
 
     print("Starting Fine tuning!!")
     # Fine tuning loop
@@ -608,11 +631,11 @@ if __name__ == '__main__':
 
             print(
                 "Fine Tuning: starting train accuracy calculation for epoch {}".format(epoch))
-            train_accuracy = calculate_set_accuracy(global_model,
-                                                    data_loader_train,
-                                                    len(train_data),
-                                                    device,
-                                                    _batch_size)
+            train_accuracy, _ = calculate_set_accuracy(global_model,
+                                                        data_loader_train,
+                                                        len(train_data),
+                                                        device,
+                                                        _batch_size)
 
             print("Fine Tuning: train set accuracy on epoch {}: {:.3f} ".format(
                 epoch, train_accuracy))
@@ -620,46 +643,49 @@ if __name__ == '__main__':
 
             print(
                 "Fine Tuning: starting validation accuracy calculation for epoch {}".format(epoch))
-            val_accuracy = calculate_set_accuracy(global_model,
-                                                  data_loader_val,
-                                                  len(val_data),
-                                                  device,
-                                                  _batch_size)
+            val_accuracy, val_report = calculate_set_accuracy(global_model,
+                                                    data_loader_val,
+                                                    len(val_data),
+                                                    device,
+                                                    _batch_size)
             
             print("Fine Tuning: Val set accuracy on epoch {}: {:.3f}".format(
                 epoch, val_accuracy))
 
             val_accuracy_history.append(val_accuracy)
             
-            print(
-                "Fine Tuning: starting test accuracy calculation for epoch {}".format(epoch))
-            test_accuracy = calculate_set_accuracy(global_model,
-                                                  data_loader_test,
-                                                  len(data_loader_test.dataset),
-                                                  device,
-                                                  _batch_size)
+            # print(
+            #     "Fine Tuning: starting test accuracy calculation for epoch {}".format(epoch))
+            # test_accuracy, _ = calculate_set_accuracy(global_model,
+            #                                         data_loader_test,
+            #                                         len(data_loader_test.dataset),
+            #                                         device,
+            #                                         _batch_size)
             
-            print("Fine Tuning: Test set accuracy on epoch {}: {:.3f}".format(
-                epoch, test_accuracy))
+            # print("Fine Tuning: Test set accuracy on epoch {}: {:.3f}".format(
+            #     epoch, test_accuracy))
 
-            test_accuracy_history.append(test_accuracy)
+            # test_accuracy_history.append(test_accuracy)
 
             wandb.log({'epoch': epoch,
                    'epoch_time_seconds': elapsed_time,
                    'train_loss_avg': train_loss_avg,
                    'train_accuracy_history': train_accuracy,
                    'val_accuracy_history': val_accuracy,
-                   'test_accuracy_history': test_accuracy})
+                   'black_val_precision':val_report["black"]["precision"],
+                   'blue_val_precision':val_report["blue"]["precision"],
+                   'green_val_precision':val_report["green"]["precision"],
+                   'ttr_val_precision':val_report["ttr"]["precision"]})
 
-            if test_accuracy > max_test_accuracy:
-                print("Fine Tuning: best model obtained based on Test Acc. Saving it!")
+            if val_accuracy > max_val_accuracy:
+                print("Fine Tuning: best model obtained based on Val Acc. Saving it!")
                 save_model_weights(global_model, args.image_model,
                                    epoch, val_accuracy, device, True, args.balance_weights, args.opt)
                 best_epoch = epoch
-                max_test_accuracy = test_accuracy
+                max_val_accuracy = val_accuracy
             else:
-                print("Fine Tuning: not saving model, best Test Acc so far on epoch {}: {:.3f}".format(best_epoch,
-                                                                                                      max_test_accuracy))
+                print("Fine Tuning: not saving model, best Val Acc so far on epoch {}: {:.3f}".format(best_epoch,
+                                                                                                      max_val_accuracy))
 
     # Finished training, save data
     with open(BASE_PATH + 'save/train_loss_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
