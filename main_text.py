@@ -183,7 +183,7 @@ def calculate_set_accuracy(
 
         acc = 100 * (correct/len_data)
         print("Set acc: ", acc)
-        return acc
+        return acc, report
 
 
 def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tuning, class_weights, opt):
