@@ -376,7 +376,6 @@ if __name__ == '__main__':
         sys.exit(1)
 
     print("Starting training...")
-    global_model = torch.compile(global_model)
     global_model.to(device)
     max_val_accuracy = 0.0
     best_epoch = 0
