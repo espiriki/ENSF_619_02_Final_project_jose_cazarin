@@ -339,6 +339,7 @@ if __name__ == '__main__':
     run = wandb.init(
         project="Garbage Classification Image",
         config=config,
+        name="Image model: " + str(args.image_model)
     )
 
     wandb.watch(global_model)

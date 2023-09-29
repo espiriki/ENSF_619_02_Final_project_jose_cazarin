@@ -293,6 +293,7 @@ if __name__ == '__main__':
     run = wandb.init(
         project="Garbage Classification Text",
         config=config,
+        name="Text model: " + str(args.text_model)
     )
 
     wandb.watch(global_model)
