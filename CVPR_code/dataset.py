@@ -5,6 +5,7 @@ from CustomImageTextFolder import CustomImageTextFolder
 import albumentations as A
 import numpy as np
 from sklearn.model_selection import train_test_split as tts
+import os
 
 LABELS_COLUMN_NAME = "labels"
 SAMPLES_COLUMN_NAME = "samples"
@@ -117,6 +118,11 @@ def get_keys_from_value(d, val):
     return [k for k, v in d.items() if v == val][0]
 
 
+BASE_PATH = "D:\Mestrado\ENSF_619_02_Final_project_jose_cazarin"
+TRAIN_DATASET_PATH = "train_set"
+VAL_DATASET_PATH = "val_set"
+TEST_DATASET_PATH = "test_set"
+
 def image_and_text_loader(
         _workers,
         _batch_size,
@@ -124,60 +130,65 @@ def image_and_text_loader(
         _tokenizer,
         _image_pipeline):
 
-    all_data_img_text = CustomImageTextFolder(
-        root="../dataset_winter_2023_resized",
-        transform=Transforms(img_transf=_image_pipeline),
+    # folder_name = "try_set"
+    folder_name = "winter_2023_dataset_with_text_original_resized"
+
+    aux = [folder_name, TRAIN_DATASET_PATH]
+    dataset_folder = '_'.join(aux)
+    train_data = CustomImageTextFolder(
+        root=os.path.join(BASE_PATH, dataset_folder),
         tokens_max_len=_max_len,
-        tokenizer_text=_tokenizer)
+        tokenizer_text=_tokenizer,
+        transform=Transforms(img_transf=_image_pipeline))
 
-    X_train_set, X_val_plus_test_set, Y_train_set, Y_val_plus_test_set = tts(
-        all_data_img_text,
-        all_data_img_text.targets,
-        # 80% for training
-        test_size=0.2,
-        stratify=all_data_img_text.targets
-    )
+    aux = [folder_name, VAL_DATASET_PATH]
+    dataset_folder = '_'.join(aux)
+    val_data = CustomImageTextFolder(
+        root=os.path.join(BASE_PATH, dataset_folder),
+        tokens_max_len=_max_len,
+        tokenizer_text=_tokenizer,
+        transform=Transforms(img_transf=_image_pipeline))
 
-    X_validation_set, X_test_set, Y_validation_set, Y_test_set = tts(
-        X_val_plus_test_set,
-        Y_val_plus_test_set,
-        # From the rest, evenly divide between val and test set
-        test_size=0.5,
-        stratify=Y_val_plus_test_set,
-    )
+    aux = [folder_name, TEST_DATASET_PATH]
+    dataset_folder = '_'.join(aux)
+    test_data = CustomImageTextFolder(
+        root=os.path.join(BASE_PATH, dataset_folder),
+        tokens_max_len=_max_len,
+        tokenizer_text=_tokenizer,
+        transform=Transforms(img_transf=_image_pipeline))
 
-    sets = [Y_train_set, Y_validation_set, Y_test_set]
-    sets_names = ["Train", "Validation", "Test"]
+    # sets = [Y_train_set, Y_validation_set, Y_test_set]
+    # sets_names = ["Train", "Validation", "Test"]
 
-    for set, set_name in zip(sets, sets_names):
-        num_samples_each_class = np.unique(set, return_counts=True)[1]
-        total = np.sum(num_samples_each_class)
-        print("{} set num of samples: {}".format(set_name, total))
-        for i in range(4):
-            print("    {} set percentage of class {}: {:.2f}".format(
-                set_name,
-                get_keys_from_value(all_data_img_text.class_to_idx, i),
-                100*(num_samples_each_class[i]/total)))
+    # for set, set_name in zip(sets, sets_names):
+    #     num_samples_each_class = np.unique(set, return_counts=True)[1]
+    #     total = np.sum(num_samples_each_class)
+    #     print("{} set num of samples: {}".format(set_name, total))
+    #     for i in range(4):
+    #         print("    {} set percentage of class {}: {:.2f}".format(
+    #             set_name,
+    #             get_keys_from_value(all_data_img_text.class_to_idx, i),
+    #             100*(num_samples_each_class[i]/total)))
 
     train_loader = DataLoader(
-        X_train_set,
+        train_data,
         batch_size=_batch_size,
         num_workers=_workers,
         shuffle=True
     )
 
     val_loader = DataLoader(
-        X_validation_set,
+        val_data,
         batch_size=_batch_size,
         num_workers=_workers,
         shuffle=True
     )
 
     test_loader = DataLoader(
-        X_test_set,
+        test_data,
         batch_size=_batch_size,
         num_workers=_workers,
         shuffle=True
     )
 
-    return train_loader, val_loader, test_loader, len(all_data_img_text)
+    return train_loader, val_loader, test_loader

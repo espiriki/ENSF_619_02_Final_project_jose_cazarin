@@ -327,13 +327,13 @@ if __name__ == '__main__':
         tokenizer_text=_tokenizer,
         transform=Transforms(img_transf=get_dummy_pipeline()))
 
-    aux = [args.dataset_folder_name, VAL_DATASET_PATH]
-    dataset_folder = '_'.join(aux)
-    test_data = CustomImageTextFolder(
-        root=os.path.join(BASE_PATH, dataset_folder),
-        tokens_max_len=_max_len,
-        tokenizer_text=_tokenizer,
-        transform=Transforms(img_transf=get_dummy_pipeline()))
+    # aux = [args.dataset_folder_name, VAL_DATASET_PATH]
+    # dataset_folder = '_'.join(aux)
+    # test_data = CustomImageTextFolder(
+    #     root=os.path.join(BASE_PATH, dataset_folder),
+    #     tokens_max_len=_max_len,
+    #     tokenizer_text=_tokenizer,
+    #     transform=Transforms(img_transf=get_dummy_pipeline()))
 
     _num_workers = 8
 
@@ -349,11 +349,11 @@ if __name__ == '__main__':
                                                   num_workers=_num_workers,
                                                   pin_memory=True)
 
-    data_loader_test = torch.utils.data.DataLoader(dataset=test_data,
-                                                   batch_size=_batch_size,
-                                                   shuffle=True,
-                                                   num_workers=_num_workers,
-                                                   pin_memory=True)
+    # data_loader_test = torch.utils.data.DataLoader(dataset=test_data,
+    #                                                batch_size=_batch_size,
+    #                                                shuffle=True,
+    #                                                num_workers=_num_workers,
+    #                                                pin_memory=True)
 
     print(f"Total num of texts: {len(train_data)}")
     for i in range(_num_classes):

@@ -29,8 +29,8 @@ def MBNetLarge(num_classes=4, transfer_learning=False):
 
 def decision(probability):
     value = random.random()
-    print("value: ", value)
-    return random.random() < probability
+    # print("value: ", value)
+    return value < probability
 
 
 class SpamClassifierDistilBert(nn.Module):
@@ -99,27 +99,50 @@ class RobertaAndMBNet(nn.Module):
         self.image_model = MBNetLarge(n_classes, True)
 
         self.drop = nn.Dropout(p=drop_ratio)
-        self.fc_layer_neurons = 512
+        self.fc_layer_neurons = 256
 
-        self.features_to_class_text = \
-            nn.Linear(self.text_model.config.hidden_size, n_classes)
-
-        self.features_to_class_image = \
-            nn.Linear(self.image_model.classifier[0].out_features, n_classes)
+        self.image_dropout = nn.Dropout2d(p=1.0)
+        self.text_dropout = nn.Dropout1d(p=1.0)
+        self.prob_image_text_dropout = 0.33
 
         # 1280 from image + 768 from text
         # 512 is the size of the FC layer
+        
+        self.image_to_hidden_size = \
+            nn.Linear(self.image_model.classifier[0].out_features,
+                      self.fc_layer_neurons)
+            
+        self.text_to_hidden_size = \
+            nn.Linear(self.text_model.config.hidden_size,
+                      self.fc_layer_neurons)            
+        
         self.concat_layer = \
-            nn.Linear(self.image_model.classifier[0].out_features +
-                      self.text_model.config.hidden_size, self.fc_layer_neurons)
+            nn.Linear(self.fc_layer_neurons*2, self.fc_layer_neurons)
 
         # FC layer to classes
         self.fc_layer = \
             nn.Linear(self.fc_layer_neurons, n_classes)
 
-        self.image_dropout = nn.Dropout2d(p=1.0)
-        self.text_dropout = nn.Dropout1d(p=1.0)
-        self.prob_image_text_dropout = 0.33
+        # Layers for gated output        
+        self.gated_output_hidden_size = 256
+        self.hyper_tang_layer = nn.Tanh()
+        self.softmax_layer = nn.Softmax()
+        
+        self.image_features_hidden_layer = \
+            nn.Linear(self.image_model.classifier[0].out_features,
+                      self.gated_output_hidden_size)
+            
+        self.text_features_hidden_layer = \
+            nn.Linear(self.text_model.config.hidden_size,
+                      self.gated_output_hidden_size)            
+            
+        self.z_layer = \
+            nn.Linear(self.gated_output_hidden_size * 2,
+                      self.gated_output_hidden_size)
+            
+        # FC layer to classes
+        self.fc_layer_gated = \
+            nn.Linear(self.gated_output_hidden_size, n_classes)
 
     def forward(self,
                 _input_ids,
@@ -183,6 +206,9 @@ class RobertaAndMBNet(nn.Module):
 
         image_features = self.image_model(_images)
 
+        image_hidden_size = self.image_to_hidden_size(image_features)
+        text_hidden_size = self.text_to_hidden_size(text_features)
+
         # print("Image Features Output Shape: {}".format(
         #     image_features.shape))
         # image_model_out_classes = self.features_to_class_image(
@@ -196,7 +222,7 @@ class RobertaAndMBNet(nn.Module):
         #     text_model_out_classes.shape))
 
         image_plus_text_features = torch.cat(
-            (text_features, image_features), dim=1)
+            (image_hidden_size, text_hidden_size), dim=1)
 
         # print("Image+Text Features Shape: {}".format(
         #     image_plus_text_features.shape))
@@ -206,6 +232,94 @@ class RobertaAndMBNet(nn.Module):
         final_output = self.fc_layer(after_drop)
         # print("Image+Text Class Shape: {}".format(
         #     final_output.shape))
+        
+        return final_output
+        
+        
+    def forward_gated(self,
+                _input_ids,
+                _attention_mask,
+                _images,
+                eval=False,
+                remove_image=False,
+                remove_text=False):
+
+        # print("forward pass shape images: ", _images.shape)
+        # print("forward pass shape text: ", _input_ids.shape)
+
+        # During evaluation we want to use the dropout
+        # to always remove only images or always remove
+        # only text
+        if eval:
+            self.image_dropout.train()
+            self.text_dropout.train()
+            if remove_image:
+                # print("    zeroing images on EVAL")
+                _images = self.image_dropout(_images)
+            if remove_text:
+                # print("    zeroing text on EVAL")
+                _input_ids = self.text_dropout(_input_ids)
+                
+            if not remove_image and not remove_text:
+                pass
+                # print("using both on EVAL")                
+
+        else:
+            if decision(self.prob_image_text_dropout):
+                image_or_text = decision(0.5)
+                if image_or_text:
+                    print("    zeroing images")
+                    _images = self.image_dropout(_images)
+                else:
+                    print("    zeroing text")
+                    _input_ids = self.text_dropout(_input_ids)
+            else:
+                print("using both")
+
+
+        text_output = self.text_model(
+            input_ids=_input_ids,
+            attention_mask=_attention_mask
+        )
+        hidden_state = text_output[0]
+        text_features = hidden_state[:, 0]
+
+        image_features = self.image_model(_images)
+
+        # 256 * bs
+        image_feats_after_tanh =\
+            self.hyper_tang_layer(self.image_features_hidden_layer(image_features))
+        # 256 * bs
+        text_feats_after_tanh =\
+            self.hyper_tang_layer(self.text_features_hidden_layer(text_features))
+        # print("image_feats_after_tanh shape: ", image_feats_after_tanh.shape)
+        # print("text_feats_after_tanh shape: ", text_feats_after_tanh.shape)
+
+        # 512 * bs        
+        concat_output_before_tanh = torch.cat(
+            (self.image_features_hidden_layer(image_features),
+            self.text_features_hidden_layer(text_features)), dim=1)
+        # print("concat_output_before_tanh shape: ", concat_output_before_tanh.shape)
+        
+        # in 512*bs and out 256 * bs
+        z_layer_output = self.softmax_layer(self.z_layer(concat_output_before_tanh))
+        # print("z_layer_output shape: ", z_layer_output.shape)
+        
+        # z_images will be 256 * bs
+        z_images = z_layer_output * image_feats_after_tanh
+        # print("z_images shape: ", z_images.shape)
+        
+        # z_texts will be 256 * bs
+        z_texts =  (1 - z_layer_output) * text_feats_after_tanh
+        # print("z_texts shape: ", z_texts.shape)
+        
+        gate_output = z_images + z_texts
+        # print("gate_output shape: ", gate_output.shape)
+
+        after_dropout = self.drop(gate_output)
+
+        final_output = self.fc_layer_gated(after_dropout)
+        # print("final_output shape: ", final_output.shape)
 
         return final_output
 

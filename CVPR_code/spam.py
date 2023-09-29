@@ -135,9 +135,10 @@ def calculate_set_accuracy(
             print("Batches {}/{} ".format(batch_idx,
                                         n_batches), end='\r')
 
-        print("BOTH test acc: ", 100 * (correct/len_data))
+        both_test_acc = 100 * (correct/len_data)
+        print("BOTH test acc: ", both_test_acc)
 
-    return 0.0
+    return both_test_acc
 
 
 def clean_txt(text):
@@ -208,19 +209,18 @@ def main():
     tokenizer = text_and_image_model.get_tokenizer()
     width, height = text_and_image_model.get_image_size()
 
-    train_loader, val_loader, test_loader, total_data_len = image_and_text_loader(
+    train_loader, val_loader, test_loader = image_and_text_loader(
         NUM_WORKERS,
         BATCH_SIZE,
         MAX_TOKEN_LEN,
         tokenizer,
         get_image_pipeline(width, height))
 
-    train_optimizer = torch.optim.SGD(text_and_image_model.parameters(),
+    train_optimizer = torch.optim.AdamW(text_and_image_model.parameters(),
                                       lr=0.001/2)
 
     criterion = nn.CrossEntropyLoss().to(device)
 
-    print(total_data_len)
     print("Starting training on device: {}".format(device))
     max_test_accuracy = 0.0
     best_epoch = 0

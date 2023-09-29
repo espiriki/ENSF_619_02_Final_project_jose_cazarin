@@ -478,11 +478,11 @@ if __name__ == '__main__':
                                                   num_workers=_num_workers,
                                                   pin_memory=True)
 
-    data_loader_test = torch.utils.data.DataLoader(dataset=test_data,
-                                                   batch_size=_batch_size,
-                                                   shuffle=True,
-                                                   num_workers=_num_workers,
-                                                   pin_memory=True)
+    # data_loader_test = torch.utils.data.DataLoader(dataset=test_data,
+    #                                                batch_size=_batch_size,
+    #                                                shuffle=True,
+    #                                                num_workers=_num_workers,
+    #                                                pin_memory=True)
 
     print(f"Total num of train images: {len(train_data)}")
     for i in range(_num_classes):
