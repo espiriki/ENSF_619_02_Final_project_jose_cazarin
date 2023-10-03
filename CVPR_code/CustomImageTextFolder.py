@@ -28,10 +28,6 @@ def has_file_allowed_extension(filename: str, extensions: Union[str, Tuple[str, 
 def pre_process_text(text):
     text = text.lower()
 
-    # Remove the last _ that comes before the numbers
-    text = text.rsplit('_', 1)[0]
-
-    # Remove the _ that separates words
     text = text.replace("_", " ")
 
     # Remove the digits
@@ -42,12 +38,7 @@ def pre_process_text(text):
     pattern_remove_symbols = r'[^a-zA-Z ]+'
     text = re.sub(pattern_remove_symbols, '', text)
 
-    if text[0] == " ":
-        text = text[1:]
-    if text[-1] == " ":
-        text = text[:-1]
-
-    return text
+    return text.strip()
 
 
 def custom_make_dataset(
