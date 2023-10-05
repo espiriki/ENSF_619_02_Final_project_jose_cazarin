@@ -40,6 +40,9 @@ def args_parser():
 
     parser.add_argument('--calculate_dataset_stats',
                         action=argparse.BooleanOptionalAction, default=False, help="Calculate the development set stats used for normalization")
+    
+    parser.add_argument('--prob_aug', type=float, default=0.6,
+                        help='Probability of applying augmentations')
 
     args = parser.parse_args()
     return args

@@ -26,6 +26,7 @@ from CVPR_code.CustomImageTextFolder import *
 from torchmetrics.classification import ConfusionMatrix
 import ssl
 from sklearn.metrics import classification_report
+from datetime import datetime
 
 _num_classes = 4
 
@@ -53,9 +54,8 @@ eff_net_sizes = {
 }
 
 BASE_PATH = "/project/def-rmsouza/jocazar/"
-TRAIN_DATASET_PATH = "train_set"
-VAL_DATASET_PATH = "val_set"
-TEST_DATASET_PATH = "test_set"
+TRAIN_DATASET_PATH = "Train"
+VAL_DATASET_PATH = "Val"
 
 
 def get_class_weights(train_dataset_path):
@@ -336,10 +336,12 @@ if __name__ == '__main__':
         dataset_id="garbage",
     )
 
+    now = datetime.now()
+    date_time = now.strftime("%m/%d/%Y, %H:%M:%S")
     run = wandb.init(
         project="Garbage Classification Image",
         config=config,
-        name="Image model: " + str(args.image_model)
+        name="Image model: " + str(args.image_model) + " " + str(date_time)
     )
 
     wandb.watch(global_model)
@@ -372,42 +374,17 @@ if __name__ == '__main__':
         mean_train_dataset, std_train_dataset = calculate_mean_std_train_dataset(
             train_dataset_path, STATS_PIPELINE)
     else:
-        # Already calculated in another run
-        mean_train_dataset = [0.4183, 0.3834, 0.3471]
-        std_train_dataset = [0.0098, 0.0093, 0.0090]
+        # ImageNet mean and std        
+        mean_train_dataset = [0.485, 0.456, 0.406]
+        std_train_dataset = [0.229, 0.224, 0.225]
 
     print("Mean Train Dataset: {}, STD Train Dataset: {}".format(
         mean_train_dataset, std_train_dataset))
 
-    prob_augmentations = 0.6
-
     normalize_transform = A.Normalize(mean=mean_train_dataset,
                                       std=std_train_dataset, always_apply=True)
 
-    if args.calculate_dataset_stats is True:
-
-        print("Calculating Train Dataset statistics after normalization...")
-        STATS_PIPELINE_AFTER = A.Compose([
-            A.Resize(width=WIDTH,
-                     height=HEIGHT,
-                     interpolation=cv2.INTER_LINEAR),
-            normalize_transform,
-            a_pytorch.transforms.ToTensorV2()
-        ])
-        mean_train_dataset_after, std_train_dataset_after = \
-            calculate_mean_std_train_dataset(
-                train_dataset_path, STATS_PIPELINE_AFTER)
-
-        mean_train_dataset_after = mean_train_dataset_after * 255
-        std_train_dataset_after = std_train_dataset_after * 255
-
-        print("Mean Train Dataset AFTER: {}, STD Train Dataset AFTER: {}".format(
-            mean_train_dataset_after, std_train_dataset_after))
-
-        np.testing.assert_allclose(mean_train_dataset_after,
-                                   [0.0, 0.0, 0.0], atol=1e-2)
-        np.testing.assert_allclose(std_train_dataset_after,
-                                   [1.0, 1.0, 1.0], atol=1e-2)
+    prob_augmentations = args.prob_aug
 
     TRAIN_PIPELINE = A.Compose([
         A.Rotate(p=prob_augmentations, interpolation=cv2.INTER_LINEAR,
