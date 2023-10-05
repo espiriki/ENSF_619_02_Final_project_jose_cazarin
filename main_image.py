@@ -420,8 +420,6 @@ if __name__ == '__main__':
         a_pytorch.transforms.ToTensorV2()
     ])
 
-    TEST_PIPELINE = VALIDATION_PIPELINE
-
     aux = [args.dataset_folder_name, TRAIN_DATASET_PATH]
     dataset_folder = '_'.join(aux)
     train_data = CustomImageTextFolder(
@@ -433,12 +431,6 @@ if __name__ == '__main__':
     val_data = CustomImageTextFolder(
         root=os.path.join(BASE_PATH, dataset_folder),
         transform=Transforms(img_transf=VALIDATION_PIPELINE))
-
-    aux = [args.dataset_folder_name, VAL_DATASET_PATH]
-    dataset_folder = '_'.join(aux)
-    test_data = CustomImageTextFolder(
-        root=os.path.join(BASE_PATH, dataset_folder),
-        transform=Transforms(img_transf=TEST_PIPELINE))
 
     _num_workers = 8
 
