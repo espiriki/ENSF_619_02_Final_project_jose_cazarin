@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import os
 import sys
 from torchvision import transforms
 import torchvision
@@ -23,6 +24,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sn
 from matplotlib.colors import LinearSegmentedColormap
+from sklearn.metrics import classification_report
 
 _num_classes = 4
 
@@ -49,12 +51,16 @@ eff_net_sizes = {
     'eff_v2_large': (480, 480)
 }
 
-BASE_PATH = "/project/def-rmsouza/jocazar/"
-
-TEST_DATA_PATH = BASE_PATH + "test_dataset_fixed_resized_v2"
+BASE_PATH = "./test_set_reports"
 
 
-def calculate_test_accuracy(model, data_loader, len_test_data, hw_device, batch_size, args):
+def calculate_test_accuracy(
+        model,
+        data_loader,
+        len_test_data,
+        hw_device,
+        batch_size,
+        args):
 
     correct = 0
     n_batches = math.ceil((len_test_data/batch_size))
@@ -94,7 +100,7 @@ def calculate_test_accuracy(model, data_loader, len_test_data, hw_device, batch_
     conf_matrix = confmat(torch.tensor(all_labels), torch.tensor(all_preds))
     print(conf_matrix)
 
-    classes = ["black", "blue", "green", "ttr"]
+    classes = ["Black", "Blue", "Green", "TTR"]
 
     df_cm = pd.DataFrame(conf_matrix, index=classes,
                          columns=classes)
@@ -102,10 +108,25 @@ def calculate_test_accuracy(model, data_loader, len_test_data, hw_device, batch_
     plt.rcParams.update({'font.size': 16})
     plt.figure(figsize=(10, 5))
     sn.heatmap(df_cm, annot=True, cmap='viridis', fmt='g')
-    plt.savefig(BASE_PATH + 'conf_matrix_model_{}_class_weights_{}.png'.format(
-        args.model, args.balance_weights))
+    plt.savefig(
+        os.path.join(BASE_PATH,
+                     'conf_matrix_image_model_{}_class_weights_{}_test_set_acc_{:.2f}.png'.format(
+                         args.image_model, args.balance_weights, test_acc)))
 
-    return test_acc
+    report = classification_report(torch.tensor(all_labels).cpu(),
+                                   torch.tensor(all_preds).cpu(),
+                                   target_names=classes)
+
+    report_dict = classification_report(torch.tensor(all_labels).cpu(),
+                                        torch.tensor(all_preds).cpu(),
+                                        target_names=classes, output_dict=True)
+
+    dataframe = pd.DataFrame.from_dict(report_dict)
+    dataframe.to_csv(os.path.join(BASE_PATH,
+                                  "image_model_{}_report_test_set_acc_{:.2f}.csv".format(args.image_model, test_acc)),
+                     index=True)
+
+    return test_acc, report
 
 
 if __name__ == '__main__':
@@ -122,47 +143,47 @@ if __name__ == '__main__':
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    if args.model == "b0":
+    if args.image_model == "b0":
         global_model = EffNetB0(_num_classes, args.tl)
-        input_size = eff_net_sizes[args.model]
+        input_size = eff_net_sizes[args.image_model]
         _batch_size = 40
-    elif args.model == "b4":
+    elif args.image_model == "b4":
         global_model = EffNetB4(_num_classes, args.tl)
-        input_size = eff_net_sizes[args.model]
+        input_size = eff_net_sizes[args.image_model]
         _batch_size = 32
-    elif args.model == "eff_v2_small":
+    elif args.image_model == "eff_v2_small":
         global_model = EffNetV2_S(_num_classes, args.tl)
-        input_size = eff_net_sizes[args.model]
+        input_size = eff_net_sizes[args.image_model]
         _batch_size = 48
-    elif args.model == "eff_v2_medium":
+    elif args.image_model == "eff_v2_medium":
         global_model = EffNetV2_M(_num_classes, args.tl)
-        input_size = eff_net_sizes[args.model]
+        input_size = eff_net_sizes[args.image_model]
         _batch_size = 32
-    elif args.model == "eff_v2_large":
+    elif args.image_model == "eff_v2_large":
         global_model = EffNetV2_L(_num_classes, args.tl)
-        input_size = eff_net_sizes[args.model]
+        input_size = eff_net_sizes[args.image_model]
         _batch_size = 8
-    elif args.model == "res18":
+    elif args.image_model == "res18":
         global_model = ResNet18(_num_classes, args.tl)
         input_size = (300, 300)
         _batch_size = 256
-    elif args.model == "res50":
+    elif args.image_model == "res50":
         global_model = ResNet50(_num_classes, args.tl)
         input_size = (400, 400)
         _batch_size = 96
-    elif args.model == "res152":
+    elif args.image_model == "res152":
         global_model = ResNet152(_num_classes, args.tl)
         input_size = (500, 500)
         _batch_size = 32
-    elif args.model == "mb":
+    elif args.image_model == "mb":
         global_model = MBNetLarge(_num_classes, args.tl)
         input_size = (320, 320)
         _batch_size = 256
-    elif args.model == "convnext":
+    elif args.image_model == "convnext":
         global_model = ConvNextBase(_num_classes, args.tl)
         input_size = (224, 224)
         _batch_size = 256
-    elif args.model == "transformer":
+    elif args.image_model == "transformer":
         global_model = VisionB16(_num_classes, args.tl)
         input_size = (224, 224)
         _batch_size = 256
@@ -170,7 +191,7 @@ if __name__ == '__main__':
         print("Invalid Model: {}".format(args.model))
         sys.exit(1)
 
-    print("Model: {}".format(args.model))
+    print("Image Model: {}".format(args.image_model))
 
     model_name = args.model_path
 
@@ -182,8 +203,9 @@ if __name__ == '__main__':
     HEIGHT = input_size[1]
     AR_INPUT = WIDTH / HEIGHT
 
-    mean_train_dataset = [0.5558, 0.5318, 0.5029]
-    std_train_dataset = [0.0315, 0.0318, 0.0315]
+    # ImageNet mean and std
+    mean_train_dataset = [0.485, 0.456, 0.406]
+    std_train_dataset = [0.229, 0.224, 0.225]
 
     normalize_transform = A.Normalize(mean=mean_train_dataset,
                                       std=std_train_dataset, always_apply=True)
@@ -197,7 +219,7 @@ if __name__ == '__main__':
         a_pytorch.transforms.ToTensorV2()
     ])
 
-    test_data = torchvision.datasets.ImageFolder(root=TEST_DATA_PATH,
+    test_data = torchvision.datasets.ImageFolder(root=args.dataset_folder_name,
                                                  transform=Transforms(img_transf=TEST_PIPELINE))
 
     print("Num of test images: {}".format(len(test_data)))
@@ -214,11 +236,13 @@ if __name__ == '__main__':
     if "false" in args.model_path or "False" in args.model_path:
         args.balance_weights = False
 
-    test_accuracy = calculate_test_accuracy(global_model,
-                                            data_loader_test,
-                                            len(test_data),
-                                            device,
-                                            _batch_size, args)
+    test_accuracy, test_report = calculate_test_accuracy(global_model,
+                                                         data_loader_test,
+                                                         len(test_data),
+                                                         device,
+                                                         _batch_size, args)
 
     print(test_data.class_to_idx)
     print("Test accuracy: {:.2f} %".format(test_accuracy))
+    print("Test Report:")
+    print(test_report)
