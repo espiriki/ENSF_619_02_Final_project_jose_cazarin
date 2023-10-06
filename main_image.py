@@ -284,15 +284,15 @@ if __name__ == '__main__':
         args.acc_steps = 36
     elif model == "res18":
         global_model = ResNet18(_num_classes, args.tl)
-        input_size = (300, 300)
+        input_size = (448, 448)
         _batch_size = 256
     elif model == "res50":
         global_model = ResNet50(_num_classes, args.tl)
-        input_size = (400, 400)
+        input_size = (448, 448)
         _batch_size = 96
     elif model == "res152":
         global_model = ResNet152(_num_classes, args.tl)
-        input_size = (500, 500)
+        input_size = (448, 448)
         _batch_size = 32
     elif model == "mb":
         global_model = MBNetLarge(_num_classes, args.tl)
