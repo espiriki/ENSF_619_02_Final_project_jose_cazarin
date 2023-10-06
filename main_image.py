@@ -2,45 +2,38 @@
 # -*- coding: utf-8 -*-
 
 import sys
-from torchvision import transforms
-import torchvision
-from models import *
-from options import args_parser
+import math
+import csv
+import os
+import ssl
+import time
+from datetime import datetime
+
+import wandb
+import numpy as np
+import matplotlib.pyplot as plt
+
+import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.utils.data import Subset
 from torch.utils.data import random_split
-import torch
-import matplotlib.pyplot as plt
-import math
-import csv
-import keep_aspect_ratio
-import albumentations as A
-import cv2
-import albumentations.pytorch as a_pytorch
-import numpy as np
-import wandb
-import torch.nn as nn
-import itertools
-import time
-from CVPR_code.CustomImageTextFolder import *
 from torchmetrics.classification import ConfusionMatrix
-import ssl
 from sklearn.metrics import classification_report
-from datetime import datetime
+
+import albumentations as A
+import albumentations.pytorch as a_pytorch
+
+from models import *
+from options import args_parser
+from CustomImageTextFolder import *
+import keep_aspect_ratio
 
 _num_classes = 4
 
-
-class Transforms:
-    def __init__(self, img_transf: A.Compose):
-        self.img_transf = img_transf
-
-    def __call__(self, img, *args, **kwargs):
-        img = np.array(img)
-        augmented = self.img_transf(image=img)
-        image = augmented["image"]
-        return image
-
+BASE_PATH = "/project/def-rmsouza/jocazar/"
+TRAIN_DATASET_PATH = "Train"
+VAL_DATASET_PATH = "Val"
 
 eff_net_sizes = {
     'b0': (256, 224),
@@ -53,30 +46,15 @@ eff_net_sizes = {
     'eff_v2_large': (480, 480)
 }
 
-BASE_PATH = "/project/def-rmsouza/jocazar/"
-TRAIN_DATASET_PATH = "Train"
-VAL_DATASET_PATH = "Val"
+class Transforms:
+    def __init__(self, img_transf: A.Compose):
+        self.img_transf = img_transf
 
-
-def get_class_weights(train_dataset_path):
-
-    train_set = CustomImageTextFolder(train_dataset_path)
-
-    total_num_samples_dataset = 0.0
-    num_samples_each_class = []
-    for i in range(_num_classes):
-        num_samples_each_class.append(len(train_set.per_class[i]))
-        total_num_samples_dataset += (len(train_set.per_class[i]))
-
-    class_weights = []
-
-    for i in range(_num_classes):
-        class_weight = total_num_samples_dataset / \
-            (_num_classes * num_samples_each_class[i])
-        class_weights.append(class_weight)
-
-    return class_weights
-
+    def __call__(self, img, *args, **kwargs):
+        img = np.array(img)
+        augmented = self.img_transf(image=img)
+        image = augmented["image"]
+        return image
 
 def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
                   batch_size, train_optimizer, weights, use_class_weights, acc_steps):
@@ -125,11 +103,6 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
 
     return n_batches, batch_loss
 
-
-def flatten(l):
-    return [item for sublist in l for item in sublist]
-
-
 def calculate_set_accuracy(
         model,
         data_loader,
@@ -177,7 +150,6 @@ def calculate_set_accuracy(
         print("Set acc: ", acc)
         return acc, report
 
-
 def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tuning, class_weights, opt):
 
     if fine_tuning:
@@ -201,7 +173,6 @@ def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tu
     torch.save(model.state_dict(), weights_path)
 
     model.to(hw_device)
-
 
 def calculate_mean_std_train_dataset(train_dataset_path, pipeline):
 
@@ -228,9 +199,7 @@ def calculate_mean_std_train_dataset(train_dataset_path, pipeline):
 
     return mean, std
 
-
 def count_parameters(model): return sum(p.numel() for p in model.parameters())
-
 
 if __name__ == '__main__':
     args = args_parser()
@@ -252,476 +221,215 @@ if __name__ == '__main__':
 
     print("Image Model: {}".format(args.image_model))
 
-    global_model = EffNetB4(_num_classes, args.tl)
-    input_size = eff_net_sizes["b4"]
-    _batch_size = 256
-    _batch_size_FT = 42
+    global_model = EffNetB4(_num_classes, args.tl).to(device)
 
-    model = args.image_model
-    if model == "b0":
-        global_model = EffNetB0(_num_classes, args.tl)
-        input_size = eff_net_sizes[model]
-        _batch_size = 256
-        _batch_size_FT = 256
-    elif model == "b4":
-        global_model = EffNetB4(_num_classes, args.tl)
-        input_size = eff_net_sizes[model]
-        _batch_size = 256
-        _batch_size_FT = 42
-    elif model == "eff_v2_small":
-        global_model = EffNetV2_S(_num_classes, args.tl)
-        input_size = eff_net_sizes[model]
-        _batch_size = 48
-    elif model == "eff_v2_medium":
-        global_model = EffNetV2_M(_num_classes, args.tl)
-        input_size = eff_net_sizes[model]
-        _batch_size = 24
-        args.acc_steps = 12
-    elif model == "eff_v2_large":
-        global_model = EffNetV2_L(_num_classes, args.tl)
-        input_size = eff_net_sizes[model]
-        _batch_size = 8
-        args.acc_steps = 36
-    elif model == "res18":
-        global_model = ResNet18(_num_classes, args.tl)
-        input_size = (448, 448)
-        _batch_size = 256
-    elif model == "res50":
-        global_model = ResNet50(_num_classes, args.tl)
-        input_size = (448, 448)
-        _batch_size = 96
-    elif model == "res152":
-        global_model = ResNet152(_num_classes, args.tl)
-        input_size = (448, 448)
-        _batch_size = 32
-    elif model == "mb":
-        global_model = MBNetLarge(_num_classes, args.tl)
-        input_size = (320, 320)
-        _batch_size = 256
-    elif model == "convnext":
-        global_model = ConvNextBase(_num_classes, args.tl)
-        input_size = (224, 224)
-        _batch_size = 128
-    elif model == "transformer":
-        global_model = VisionB16(_num_classes, args.tl)
-        input_size = (224, 224)
-        _batch_size = 128
-    else:
-        print("Invalid Model: {}".format(model))
-        sys.exit(1)
+    wandb.init(entity="kodexlab", project="snow_reflection", job_type="train",
+               config=args)
 
-    print("Num total parameters of the model: {}".format(
-        count_parameters(global_model)))
-    print("Batch Size: {}".format(_batch_size))
-    print("Batch Size FT: {}".format(_batch_size_FT))
-    print("Learning Rate: {}".format(args.lr))
-    print("Regularization Rate: {}".format(args.reg))
-    print("Using class weights: {}".format(args.balance_weights))
-    print("Optimizer: {}".format(args.opt))
-    print("Grad Acc steps: {}".format(args.acc_steps))
+    config = wandb.config
+    config.update({"num_parameters": count_parameters(global_model)})
 
-    print("Training for {} epochs".format(args.epochs))
-    if args.tl is True:
-        print("Training for {} fine tuning epochs".format(args.ft_epochs))
-        print("Fraction of the LR for fine tuning: {}".format(args.fraction_lr))
+    # Logging image sizes
+    config.update(
+        {"image_input_size": eff_net_sizes[args.image_model]})
 
-    config = dict(
-        num_model_parameters=count_parameters(global_model),
-        batch_size=_batch_size,
-        batch_size_FT=_batch_size_FT,
-        learning_rate=args.lr,
-        regularization=args.reg,
-        balance_weights=args.balance_weights,
-        optimizer=args.opt,
-        batch_acc_steps=args.acc_steps,
-        num_epochs=args.epochs,
-        fine_tuning_epochs=args.ft_epochs,
-        fraction_lr=args.fraction_lr,
-        architecture=args.image_model,
-        dataset_id="garbage",
-    )
+    # Loading dataset, calculating dataset statistics
+    train_transform = keep_aspect_ratio.get_train_transform()
+    mean, std = calculate_mean_std_train_dataset(
+        BASE_PATH+TRAIN_DATASET_PATH, train_transform)
+    print("mean: ", mean)
+    print("std: ", std)
 
-    now = datetime.now()
-    date_time = now.strftime("%m/%d/%Y, %H:%M:%S")
-    run = wandb.init(
-        project="Garbage Classification Image",
-        config=config,
-        name="Image model: " + str(args.image_model) + " " + str(date_time)
-    )
+    # Class weights. 0=black, 1=blue, 2=green, 3=ttr
+    class_weights = [2.1, 2.6, 3.0, 3.0]
+    #class_weights = get_class_weights(BASE_PATH + TRAIN_DATASET_PATH, torch.FloatTensor([0, 1, 2, 3]))
 
-    wandb.watch(global_model)
+    # Uncomment below to run over the model weights
+    # weights = np.random.randn(4) * np.random.choice([1, 10], 4)
+    # model.load_state_dict(torch.load('BEST_model_weights.pth'))
+    if args.tl is False:
+        model = global_model
 
-    if torch.cuda.device_count() > 1:
-        print("Using {} GPUs".format(torch.cuda.device_count()))
-        global_model = nn.DataParallel(global_model)
+        print("Model Info: ", model)
 
-    WIDTH = input_size[0]
-    HEIGHT = input_size[1]
-    AR_INPUT = WIDTH / HEIGHT
+        if args.optimization == "SGD":
 
-    STATS_PIPELINE = A.Compose([
-        A.Resize(width=WIDTH,
-                 height=HEIGHT,
-                 interpolation=cv2.INTER_LINEAR),
-        a_pytorch.transforms.ToTensorV2()
-    ])
+            train_optimizer = torch.optim.SGD(
+                model.parameters(), lr=args.lr, weight_decay=args.reg, momentum=args.momentum)
+        elif args.optimization == "ADAM":
 
-    aux = [args.dataset_folder_name, TRAIN_DATASET_PATH]
-    dataset_folder = '_'.join(aux)
-    train_dataset_path = os.path.join(BASE_PATH, dataset_folder)
+            train_optimizer = torch.optim.Adam(
+                model.parameters(), lr=args.lr, weight_decay=args.reg)
 
-    class_weights = get_class_weights(train_dataset_path)
+        elif args.optimization == "ADAGRAD":
 
-    print("Class weights: {}".format(class_weights))
+            train_optimizer = torch.optim.Adagrad(
+                model.parameters(), lr=args.lr, weight_decay=args.reg)
 
-    if args.calculate_dataset_stats is True:
-        print("Calculating Train Dataset statistics...")
-        mean_train_dataset, std_train_dataset = calculate_mean_std_train_dataset(
-            train_dataset_path, STATS_PIPELINE)
-    else:
-        # ImageNet mean and std        
-        mean_train_dataset = [0.485, 0.456, 0.406]
-        std_train_dataset = [0.229, 0.224, 0.225]
+        # Learning rate scheduler
+        fraction_lr = args.fraction_lr
+        steps = math.ceil(fraction_lr*args.num_epochs)
 
-    print("Mean Train Dataset: {}, STD Train Dataset: {}".format(
-        mean_train_dataset, std_train_dataset))
+        exp_lr_scheduler = torch.optim.lr_scheduler.StepLR(
+            train_optimizer, step_size=steps, gamma=0.1)
 
-    normalize_transform = A.Normalize(mean=mean_train_dataset,
-                                      std=std_train_dataset, always_apply=True)
+        # Sending everything to GPU
+        print("Sending data to device ...")
+        # Moved to class constructor
+        #image_transforms = keep_aspect_ratio.get_train_transform(mean=mean, std=std)
+        train_data = CustomImageTextFolder(root=BASE_PATH+TRAIN_DATASET_PATH,
+                                           transform=Transforms(
+                                               img_transf=keep_aspect_ratio.get_train_transform(mean=mean, std=std)),
+                                           class_weights=class_weights)
 
-    prob_augmentations = args.prob_aug
-
-    TRAIN_PIPELINE = A.Compose([
-        A.Rotate(p=prob_augmentations, interpolation=cv2.INTER_LINEAR,
-                 border_mode=cv2.BORDER_CONSTANT,
-                 value=0, crop_border=True),
-        keep_aspect_ratio.PadToMaintainAR(aspect_ratio=AR_INPUT),
-        A.Resize(width=WIDTH,
-                 height=HEIGHT,
-                 interpolation=cv2.INTER_LINEAR),
-        A.VerticalFlip(p=prob_augmentations),
-        A.HorizontalFlip(p=prob_augmentations),
-        A.RandomBrightnessContrast(p=prob_augmentations),
-        A.Sharpen(p=prob_augmentations),
-        A.Perspective(p=prob_augmentations,
-                      pad_mode=cv2.BORDER_CONSTANT,
-                      pad_val=0),
-        # Using this transform just to zoom in an out
-        A.ShiftScaleRotate(shift_limit=0, rotate_limit=0,
-                           interpolation=cv2.INTER_LINEAR,
-                           border_mode=cv2.BORDER_CONSTANT,
-                           value=0, p=prob_augmentations,
-                           scale_limit=0.3),
-        normalize_transform,
-        a_pytorch.transforms.ToTensorV2()
-    ])
-
-    VALIDATION_PIPELINE = A.Compose([
-        keep_aspect_ratio.PadToMaintainAR(aspect_ratio=AR_INPUT),
-        A.Resize(width=WIDTH,
-                 height=HEIGHT,
-                 interpolation=cv2.INTER_LINEAR),
-        normalize_transform,
-        a_pytorch.transforms.ToTensorV2()
-    ])
-
-    aux = [args.dataset_folder_name, TRAIN_DATASET_PATH]
-    dataset_folder = '_'.join(aux)
-    train_data = CustomImageTextFolder(
-        root=os.path.join(BASE_PATH, dataset_folder),
-        transform=Transforms(img_transf=TRAIN_PIPELINE))
-
-    aux = [args.dataset_folder_name, VAL_DATASET_PATH]
-    dataset_folder = '_'.join(aux)
-    val_data = CustomImageTextFolder(
-        root=os.path.join(BASE_PATH, dataset_folder),
-        transform=Transforms(img_transf=VALIDATION_PIPELINE))
-
-    _num_workers = 8
-
-    print(train_data.class_to_idx)
-
-    data_loader_train = torch.utils.data.DataLoader(dataset=train_data,
-                                                    batch_size=_batch_size,
-                                                    shuffle=True,
-                                                    num_workers=_num_workers,
-                                                    pin_memory=True)
-
-    data_loader_val = torch.utils.data.DataLoader(dataset=val_data,
-                                                  batch_size=_batch_size,
-                                                  shuffle=True,
-                                                  num_workers=_num_workers,
-                                                  pin_memory=True)
-
-    data_loader_train_FT = torch.utils.data.DataLoader(dataset=train_data,
-                                                       batch_size=_batch_size_FT,
-                                                       shuffle=True,
-                                                       num_workers=_num_workers,
-                                                       pin_memory=True)
-
-    data_loader_val_FT = torch.utils.data.DataLoader(dataset=val_data,
-                                                     batch_size=_batch_size_FT,
-                                                     shuffle=True,
-                                                     num_workers=_num_workers,
-                                                     pin_memory=True)
-
-    print(f"Total num of train images: {len(train_data)}")
-    for i in range(_num_classes):
-        len_samples = len(train_data.per_class[i])
-        print("Num of samples for class {}: {}. Percentage of dataset: {:.2f}".format(
-            i, len_samples, (len_samples/len(train_data))*100))
-
-    train_loss_history = []
-    train_accuracy_history = []
-    val_accuracy_history = []
-
-    if args.opt == "adamw":
-        optimizer = torch.optim.AdamW(
-            global_model.parameters(), lr=args.lr, weight_decay=args.reg)
-    elif args.opt == "sgd":
-        optimizer = torch.optim.SGD(
-            global_model.parameters(), lr=args.lr, weight_decay=args.reg)
-    else:
-        print("Invalid optimizer!")
-        sys.exit(1)
-
-    print("Starting training...")
-    global_model.to(device)
-    max_val_accuracy = 0.0
-    best_epoch = 0
-
-    for epoch in range(args.epochs):
-
-        global_model.train()
-        st = time.time()
-
-        num_batches, train_loss_per_batch = run_one_epoch(epoch,
-                                                          global_model,
-                                                          data_loader_train,
-                                                          len(data_loader_train.dataset),
-                                                          device,
-                                                          _batch_size,
-                                                          optimizer,
-                                                          class_weights,
-                                                          args.balance_weights,
-                                                          args.acc_steps)
-
-        elapsed_time = time.time() - st
-        print('Epoch time: {:.1f}'.format(elapsed_time))
-
-        train_loss_avg = np.average(train_loss_per_batch)
-        train_loss_history.append(train_loss_avg)
-
-        print("Avg train loss on epoch {}: {:.3f}".format(epoch, train_loss_avg))
-        print("Max train loss on epoch {}: {:.3f}".format(
-            epoch, np.max(train_loss_per_batch)))
-        print("Min train loss on epoch {}: {:.3f}".format(
-            epoch, np.min(train_loss_per_batch)))
-
-        global_model.eval()
-
-        print("Starting train accuracy calculation for epoch {}".format(epoch))
-        train_accuracy, _ = calculate_set_accuracy(global_model,
-                                                   data_loader_train,
-                                                   len(data_loader_train.dataset),
-                                                   device,
-                                                   _batch_size)
-
-        print("Train set accuracy on epoch {}: {:.3f} ".format(
-            epoch, train_accuracy))
-        train_accuracy_history.append(train_accuracy)
-
-        print("Starting val accuracy calculation for epoch {}".format(epoch))
-        val_accuracy, val_report = calculate_set_accuracy(global_model,
-                                                          data_loader_val,
-                                                          len(data_loader_val.dataset),
-                                                          device,
-                                                          _batch_size)
-
-        print("Val set accuracy on epoch {}: {:.3f}".format(epoch, val_accuracy))
-        val_accuracy_history.append(val_accuracy)
-
-        # print("Starting test accuracy calculation for epoch {}".format(epoch))
-        # test_accuracy, _ = calculate_set_accuracy(global_model,
-        #                                       data_loader_test,
-        #                                       len(data_loader_test.dataset),
-        #                                       device,
-        #                                       _batch_size)
-
-        # print("Train set accuracy on epoch {}: {:.3f}".format(epoch, val_accuracy))
-        # test_accuracy_history.append(test_accuracy)
-
-        wandb.log({'epoch': epoch,
-                   'epoch_time_seconds': elapsed_time,
-                   'train_loss_avg': train_loss_avg,
-                   'train_accuracy_history': train_accuracy,
-                   'val_accuracy_history': val_accuracy,
-                   'max_val_acc': max_val_accuracy,
-                   'black_val_precision': val_report["black"]["precision"],
-                   'blue_val_precision': val_report["blue"]["precision"],
-                   'green_val_precision': val_report["green"]["precision"],
-                   'ttr_val_precision': val_report["ttr"]["precision"]})
-
-        if val_accuracy > max_val_accuracy:
-            print("Best model obtained based on Val Acc. Saving it!")
-            save_model_weights(global_model, args.image_model,
-                               epoch, val_accuracy, device, False, args.balance_weights, args.opt)
-            max_val_accuracy = val_accuracy
-            best_epoch = epoch
+        # Create validation set
+        if args.tl is True:
+            val_data = CustomImageTextFolder(root=BASE_PATH+VAL_DATASET_PATH,
+                                             transform=Transforms(
+                                                 img_transf=keep_aspect_ratio.get_val_transform(mean=mean, std=std)),
+                                             class_weights=class_weights)
         else:
-            print("Not saving model on epoch {}, best Val Acc so far on epoch {}: {:.3f}".format(epoch, best_epoch,
-                                                                                                 max_val_accuracy))
+            # Create validation set
+            val_data = CustomImageTextFolder(root=BASE_PATH+VAL_DATASET_PATH,
+                                             transform=Transforms(
+                                                 img_transf=keep_aspect_ratio.get_val_transform(mean=mean, std=std)))
 
-    print("Starting Fine tuning!!")
-    # Fine tuning loop
-    if args.tl is True:
+        # Splitting the train dataset into train and val datasets
+        len_train_data = len(train_data)
+        val_size = int(0.2*len_train_data)
+        train_size = len_train_data - val_size
+        train_data, val_data = random_split(
+            train_data, [train_size, val_size])
 
-        # set all model parameters to train
-        for param in global_model.parameters():
-            param.requires_grad = True
+        print("len_train_data: ", len_train_data)
 
-        # update learning rate of optimizer
-        for group in optimizer.param_groups:
-            group['lr'] = args.lr/args.fraction_lr
+        # Setting up Dataloaders
+        val_loader = torch.utils.data.DataLoader(
+            dataset=val_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=8)
 
-        for epoch in range(args.ft_epochs):
+        train_loader = torch.utils.data.DataLoader(
+            dataset=train_data, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=8)
 
-            global_model.train()
-            st = time.time()
-            # train using a small learning rate
-            ft_num_batches, ft_train_loss_per_batch = run_one_epoch(epoch,
-                                                                    global_model,
-                                                                    data_loader_train_FT,
-                                                                    len(train_data),
-                                                                    device,
-                                                                    _batch_size,
-                                                                    optimizer,
-                                                                    class_weights,
-                                                                    args.balance_weights,
-                                                                    args.acc_steps)
-            elapsed_time = time.time() - st
-            print('Fine Tuning: epoch time: {:.1f}'.format(elapsed_time))
+        # Whether to use class weights during training
+        if args.use_class_weights == "yes":
+            use_class_weights = True
+        else:
+            use_class_weights = False
 
-            train_loss_avg = np.average(ft_train_loss_per_batch)
+        if args.tl is False:
+            print("Starting Training ...")
+            wandb.watch(model)
+            model = model.to(device)
 
-            print("Fine Tuning: avg train loss on epoch {}: {:.3f}".format(
-                epoch, train_loss_avg))
-            print("Fine Tuning: max train loss on epoch {}: {:.3f}".format(
-                epoch, np.max(ft_train_loss_per_batch)))
-            print("Fine Tuning: min train loss on epoch {}: {:.3f}".format(
-                epoch, np.min(ft_train_loss_per_batch)))
+            best_val_acc = 0.0
+            all_train_loss = []
+            all_val_loss = []
+            wandb_logger = wandb.summary
 
-            train_loss_history.append(train_loss_avg)
-            global_model.eval()
+            print("Starting training with number of epochs = {}".format(
+                args.num_epochs))
 
-            print(
-                "Fine Tuning: starting train accuracy calculation for epoch {}".format(epoch))
-            train_accuracy, _ = calculate_set_accuracy(global_model,
-                                                       data_loader_train_FT,
-                                                       len(train_data),
-                                                       device,
-                                                       _batch_size)
+            for epoch_num in range(args.num_epochs):
 
-            print("Fine Tuning: train set accuracy on epoch {}: {:.3f} ".format(
-                epoch, train_accuracy))
-            train_accuracy_history.append(train_accuracy)
+                print("Epoch {}/{}".format(epoch_num+1, args.num_epochs))
 
-            print(
-                "Fine Tuning: starting validation accuracy calculation for epoch {}".format(epoch))
-            val_accuracy, val_report = calculate_set_accuracy(global_model,
-                                                              data_loader_val_FT,
-                                                              len(val_data),
-                                                              device,
-                                                              _batch_size)
+                model.train()
+                n_batches, batch_loss = run_one_epoch(epoch_num,
+                                                      model,
+                                                      train_loader,
+                                                      len_train_data,
+                                                      device,
+                                                      args.batch_size,
+                                                      train_optimizer,
+                                                      class_weights,
+                                                      use_class_weights,
+                                                      args.accumulation_steps)
 
-            print("Fine Tuning: Val set accuracy on epoch {}: {:.3f}".format(
-                epoch, val_accuracy))
+                model.eval()
 
-            val_accuracy_history.append(val_accuracy)
+                val_acc, val_report = calculate_set_accuracy(
+                    model, val_loader, val_size, device, args.batch_size)
+                all_val_loss.append(np.mean(val_report['weighted avg']['f1-score']))
+                wandb.log({"Validation F1 Score": np.mean(
+                    val_report['weighted avg']['f1-score'])})
 
-            # print(
-            #     "Fine Tuning: starting test accuracy calculation for epoch {}".format(epoch))
-            # test_accuracy, _ = calculate_set_accuracy(global_model,
-            #                                         data_loader_test,
-            #                                         len(data_loader_test.dataset),
-            #                                         device,
-            #                                         _batch_size)
+                wandb_logger({"Training Loss": batch_loss})
+                wandb_logger({"Validation Loss": val_report})
 
-            # print("Fine Tuning: Test set accuracy on epoch {}: {:.3f}".format(
-            #     epoch, test_accuracy))
+                if val_acc > best_val_acc:
 
-            # test_accuracy_history.append(test_accuracy)
+                    best_val_acc = val_acc
+                    # Save the model weights
+                    save_model_weights(model, args.image_model,
+                                       epoch_num, best_val_acc, device, False, class_weights, args.optimization)
 
-            wandb.log({'epoch': epoch,
-                       'epoch_time_seconds': elapsed_time,
-                       'train_loss_avg': train_loss_avg,
-                       'train_accuracy_history': train_accuracy,
-                       'val_accuracy_history': val_accuracy,
-                       'max_val_acc': max_val_accuracy,
-                       'black_val_precision': val_report["black"]["precision"],
-                       'blue_val_precision': val_report["blue"]["precision"],
-                       'green_val_precision': val_report["green"]["precision"],
-                       'ttr_val_precision': val_report["ttr"]["precision"]})
+                if epoch_num > 1:
 
-            if val_accuracy > max_val_accuracy:
-                print("Fine Tuning: best model obtained based on Val Acc. Saving it!")
-                save_model_weights(global_model, args.image_model,
-                                   epoch, val_accuracy, device, True, args.balance_weights, args.opt)
-                best_epoch = epoch
-                max_val_accuracy = val_accuracy
-            else:
-                print("Fine Tuning: not saving model, best Val Acc so far on epoch {}: {:.3f}".format(best_epoch,
-                                                                                                      max_val_accuracy))
+                    print("mean: ", mean)
+                    print("std: ", std)
 
-    # Finished training, save data
-    with open(BASE_PATH + 'save/train_loss_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
-            args.image_model, args.lr, args.reg, args.balance_weights), 'w') as f:
+                    if epoch_num > 3:
+                        last_val_accs = all_val_loss[-4:]
+                        if abs(last_val_accs[0]-last_val_accs[-1]) < 1e-4:
+                            break
+                    # Learning rate scheduling
+                    exp_lr_scheduler.step()
+                    print("Updated lr: ", train_optimizer.param_groups[0]['lr'])
+            # Save the best model weights
+            print("Finished Training ...")
 
-        write = csv.writer(f)
-        write.writerow(map(lambda x: x, train_loss_history))
+    elif args.tl is True:
+        if args.image_model == "eff_v2_small":
+            model = EffNetV2(model_name="efficientnetv2_rw_s",
+                             num_classes=1000, in_channels=3)
 
-    with open(BASE_PATH + 'save/train_acc_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
-            args.image_model, args.lr, args.reg, args.balance_weights), 'w') as f:
+            print("Transfer Learning with {}".format(args.image_model))
+        elif args.image_model == "eff_v2_medium":
+            model = EffNetV2(model_name="efficientnetv2_rw_m",
+                             num_classes=1000, in_channels=3)
+            print("Transfer Learning with {}".format(args.image_model))
+        elif args.image_model == "eff_v2_large":
+            model = EffNetV2(model_name="efficientnetv2_rw_l",
+                             num_classes=1000, in_channels=3)
+            print("Transfer Learning with {}".format(args.image_model))
 
-        write = csv.writer(f)
-        write.writerow(map(lambda x: x, train_accuracy_history))
+        num_ftrs = model.classifier.in_features
+        model.classifier = nn.Linear(num_ftrs, 4)
 
-    with open(BASE_PATH + 'save/val_acc_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
-            args.image_model, args.lr, args.reg, args.balance_weights), 'w') as f:
+        if args.optimization == "SGD":
 
-        write = csv.writer(f)
-        write.writerow(map(lambda x: x, val_accuracy_history))
+            train_optimizer = torch.optim.SGD(
+                model.parameters(), lr=args.lr, weight_decay=args.reg, momentum=args.momentum)
+        elif args.optimization == "ADAM":
 
-    # Plot train loss
-    train_loss_history = torch.FloatTensor(train_loss_history).cpu()
-    plt.figure()
-    plt.plot(range(len(train_loss_history)), train_loss_history)
-    plt.xlabel('Epochs')
-    plt.ylabel('Train loss')
-    plt.title('Model: {}'.format(args.image_model))
-    plt.savefig(
-        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_train_loss.png'.format(
-            args.image_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
+            train_optimizer = torch.optim.Adam(
+                model.parameters(), lr=args.lr, weight_decay=args.reg)
 
-    # Plot train accuracy
-    train_accuracy_history = torch.FloatTensor(train_accuracy_history).cpu()
-    plt.figure()
-    plt.plot(range(len(train_accuracy_history)), train_accuracy_history)
-    plt.xlabel('Epochs')
-    plt.ylabel('Train accuracy')
-    plt.title('Model: {}'.format(args.image_model))
-    plt.savefig(
-        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_train_accuracy.png'.format(
-            args.image_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
+        elif args.optimization == "ADAGRAD":
 
-    # Plot val accuracy
-    plt.figure()
-    plt.plot(range(len(val_accuracy_history)), val_accuracy_history)
-    plt.xlabel('Epochs')
-    plt.ylabel('Val accuracy per Epoch')
-    plt.title('Model: {}'.format(args.image_model))
-    plt.savefig(
-        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_val_accuracy.png'.format(
-            args.image_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
+            train_optimizer = torch.optim.Adagrad(
+                model.parameters(), lr=args.lr, weight_decay=args.reg)
 
-    run.finish()
+        val_data = CustomImageTextFolder(root=BASE_PATH+VAL_DATASET_PATH,
+                                         transform=Transforms(
+                                             img_transf=keep_aspect_ratio.get_val_transform(mean=mean, std=std)),
+                                         class_weights=class_weights)
+
+        val_loader = torch.utils.data.DataLoader(
+            dataset=val_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=8)
+
+        print("Loading weights from {}".format(
+            BASE_PATH+"model_weights/BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_Opt_{}_VAL_ACC_{:.3f}_class_weights_{}.pth".format(
+                args.image_model, args.num_epochs, args.lr, args.reg, args.optimization, 85.467, class_weights)))
+
+        model.load_state_dict(torch.load(BASE_PATH+"model_weights/BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_Opt_{}_VAL_ACC_{:.3f}_class_weights_{}.pth".format(
+            args.image_model, args.num_epochs, args.lr, args.reg, args.optimization, 85.467, class_weights)))
+
+        print("Model loaded ...")
+
+        val_acc, val_report = calculate_set_accuracy(
+            model, val_loader, val_size, device, args.batch_size)
+
+        # wandb.log({"Validation F1 Score": np.mean(val_report['weighted avg']['f1-score'])})
+        print("Validation F1 Score: ", np.mean(
+            val_report['weighted avg']['f1-score']))
