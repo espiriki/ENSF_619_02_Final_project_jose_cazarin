@@ -254,17 +254,20 @@ if __name__ == '__main__':
 
     global_model = EffNetB4(_num_classes, args.tl)
     input_size = eff_net_sizes["b4"]
-    _batch_size = 32
+    _batch_size = 256
+    _batch_size_FT = 42
 
     model = args.image_model
     if model == "b0":
         global_model = EffNetB0(_num_classes, args.tl)
         input_size = eff_net_sizes[model]
-        _batch_size = 40
+        _batch_size = 256
+        _batch_size_FT = 256
     elif model == "b4":
         global_model = EffNetB4(_num_classes, args.tl)
         input_size = eff_net_sizes[model]
-        _batch_size = 32
+        _batch_size = 256
+        _batch_size_FT = 42
     elif model == "eff_v2_small":
         global_model = EffNetV2_S(_num_classes, args.tl)
         input_size = eff_net_sizes[model]
@@ -310,6 +313,7 @@ if __name__ == '__main__':
     print("Num total parameters of the model: {}".format(
         count_parameters(global_model)))
     print("Batch Size: {}".format(_batch_size))
+    print("Batch Size FT: {}".format(_batch_size_FT))
     print("Learning Rate: {}".format(args.lr))
     print("Regularization Rate: {}".format(args.reg))
     print("Using class weights: {}".format(args.balance_weights))
@@ -324,6 +328,7 @@ if __name__ == '__main__':
     config = dict(
         num_model_parameters=count_parameters(global_model),
         batch_size=_batch_size,
+        batch_size_FT=_batch_size_FT,
         learning_rate=args.lr,
         regularization=args.reg,
         balance_weights=args.balance_weights,
@@ -448,11 +453,17 @@ if __name__ == '__main__':
                                                   num_workers=_num_workers,
                                                   pin_memory=True)
 
-    # data_loader_test = torch.utils.data.DataLoader(dataset=test_data,
-    #                                                batch_size=_batch_size,
-    #                                                shuffle=True,
-    #                                                num_workers=_num_workers,
-    #                                                pin_memory=True)
+    data_loader_train_FT = torch.utils.data.DataLoader(dataset=train_data,
+                                                       batch_size=_batch_size_FT,
+                                                       shuffle=True,
+                                                       num_workers=_num_workers,
+                                                       pin_memory=True)
+
+    data_loader_val_FT = torch.utils.data.DataLoader(dataset=val_data,
+                                                     batch_size=_batch_size_FT,
+                                                     shuffle=True,
+                                                     num_workers=_num_workers,
+                                                     pin_memory=True)
 
     print(f"Total num of train images: {len(train_data)}")
     for i in range(_num_classes):
@@ -545,6 +556,7 @@ if __name__ == '__main__':
                    'train_loss_avg': train_loss_avg,
                    'train_accuracy_history': train_accuracy,
                    'val_accuracy_history': val_accuracy,
+                   'max_val_acc': max_val_accuracy,
                    'black_val_precision': val_report["black"]["precision"],
                    'blue_val_precision': val_report["blue"]["precision"],
                    'green_val_precision': val_report["green"]["precision"],
@@ -579,7 +591,7 @@ if __name__ == '__main__':
             # train using a small learning rate
             ft_num_batches, ft_train_loss_per_batch = run_one_epoch(epoch,
                                                                     global_model,
-                                                                    data_loader_train,
+                                                                    data_loader_train_FT,
                                                                     len(train_data),
                                                                     device,
                                                                     _batch_size,
@@ -605,7 +617,7 @@ if __name__ == '__main__':
             print(
                 "Fine Tuning: starting train accuracy calculation for epoch {}".format(epoch))
             train_accuracy, _ = calculate_set_accuracy(global_model,
-                                                       data_loader_train,
+                                                       data_loader_train_FT,
                                                        len(train_data),
                                                        device,
                                                        _batch_size)
@@ -617,7 +629,7 @@ if __name__ == '__main__':
             print(
                 "Fine Tuning: starting validation accuracy calculation for epoch {}".format(epoch))
             val_accuracy, val_report = calculate_set_accuracy(global_model,
-                                                              data_loader_val,
+                                                              data_loader_val_FT,
                                                               len(val_data),
                                                               device,
                                                               _batch_size)
@@ -645,6 +657,7 @@ if __name__ == '__main__':
                        'train_loss_avg': train_loss_avg,
                        'train_accuracy_history': train_accuracy,
                        'val_accuracy_history': val_accuracy,
+                       'max_val_acc': max_val_accuracy,
                        'black_val_precision': val_report["black"]["precision"],
                        'blue_val_precision': val_report["blue"]["precision"],
                        'green_val_precision': val_report["green"]["precision"],
