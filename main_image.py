@@ -271,17 +271,20 @@ if __name__ == '__main__':
     elif model == "eff_v2_small":
         global_model = EffNetV2_S(_num_classes, args.tl)
         input_size = eff_net_sizes[model]
-        _batch_size = 48
+        _batch_size = 96
+        _batch_size_FT = 64
     elif model == "eff_v2_medium":
         global_model = EffNetV2_M(_num_classes, args.tl)
         input_size = eff_net_sizes[model]
-        _batch_size = 24
+        _batch_size = 128
+        _batch_size_FT = 24
         args.acc_steps = 12
     elif model == "eff_v2_large":
         global_model = EffNetV2_L(_num_classes, args.tl)
         input_size = eff_net_sizes[model]
-        _batch_size = 8
-        args.acc_steps = 36
+        _batch_size = 96
+        _batch_size_FT = 12
+        args.acc_steps = 6
     elif model == "res18":
         global_model = ResNet18(_num_classes, args.tl)
         input_size = (448, 448)
@@ -437,7 +440,7 @@ if __name__ == '__main__':
         root=os.path.join(BASE_PATH, dataset_folder),
         transform=Transforms(img_transf=VALIDATION_PIPELINE))
 
-    _num_workers = 8
+    _num_workers = 16
 
     print(train_data.class_to_idx)
 
