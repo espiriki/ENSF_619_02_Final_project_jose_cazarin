@@ -592,16 +592,16 @@ if __name__ == '__main__':
             global_model.train()
             st = time.time()
             # train using a small learning rate
-            ft_num_batches, ft_train_loss_per_batch = run_one_epoch(epoch,
-                                                                    global_model,
-                                                                    data_loader_train_FT,
-                                                                    len(train_data),
-                                                                    device,
-                                                                    _batch_size,
-                                                                    optimizer,
-                                                                    class_weights,
-                                                                    args.balance_weights,
-                                                                    args.acc_steps)
+            _, ft_train_loss_per_batch = run_one_epoch(epoch,
+                                                       global_model,
+                                                       data_loader_train_FT,
+                                                       len(train_data),
+                                                       device,
+                                                       _batch_size_FT,
+                                                       optimizer,
+                                                       class_weights,
+                                                       args.balance_weights,
+                                                       args.acc_steps)
             elapsed_time = time.time() - st
             print('Fine Tuning: epoch time: {:.1f}'.format(elapsed_time))
 
