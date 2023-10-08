@@ -257,6 +257,10 @@ if __name__ == '__main__':
     elif args.text_model == "bart":
         global_model = Bart(_num_classes, args.model_dropout)
         _batch_size = 4
+    # 124 442 884 parameters
+    elif args.text_model == "gpt2":
+        global_model = GPT2(_num_classes, args.model_dropout)
+        _batch_size = 32
     else:
         print("Invalid Model: {}".format(args.text_model))
         sys.exit(1)

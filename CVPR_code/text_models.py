@@ -4,7 +4,7 @@ from transformers import BertModel, DistilBertModel, RobertaModel, BartForSequen
 from transformers import BertConfig, DistilBertConfig, RobertaConfig, BartConfig
 from torchvision.models import *
 from transformers import BertTokenizer, DistilBertTokenizer, RobertaTokenizer, BartTokenizer
-
+from transformers import GPT2Tokenizer, GPT2ForSequenceClassification, GPT2Config
 
 class DistilBert(nn.Module):
     def __init__(self, n_classes, drop_ratio):
@@ -129,3 +129,32 @@ class Bart(nn.Module):
 
     def get_max_token_size(self):
         return BartConfig().max_position_embeddings
+
+class GPT2(nn.Module):
+    def __init__(self, n_classes):
+        super(GPT2, self).__init__()
+        self.name = "gpt2"
+        self.model = GPT2ForSequenceClassification.from_pretrained(self.name)
+        self.model.config.pad_token_id = self.model.config.eos_token_id
+        # Freeze all layers for TL
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        self.model.score = \
+            nn.Linear(self.model.score.in_features, n_classes)
+
+    def forward(self, _input_ids, _attention_mask):
+        gpt2_output = self.model(
+            input_ids=_input_ids,
+            attention_mask=_attention_mask
+        )
+
+        return gpt2_output[0]
+
+    def get_tokenizer(self):
+        tokenizer = GPT2Tokenizer.from_pretrained(self.name)
+        tokenizer.pad_token = tokenizer.eos_token
+        return tokenizer
+
+    def get_max_token_size(self):
+        return GPT2Config().n_positions
