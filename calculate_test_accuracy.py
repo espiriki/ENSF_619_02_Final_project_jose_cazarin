@@ -3,27 +3,20 @@
 
 import os
 import sys
-from torchvision import transforms
 import torchvision
 from models import *
 from options import args_parser
-from torch.utils.data import DataLoader
-from torch.utils.data import Subset
-from torch.utils.data import random_split
 import torch
 import math
 import albumentations as A
 import cv2
 import albumentations.pytorch as a_pytorch
 import numpy as np
-# import wandb
-import torch.nn as nn
 import keep_aspect_ratio
 from torchmetrics.classification import ConfusionMatrix
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sn
-from matplotlib.colors import LinearSegmentedColormap
 from sklearn.metrics import classification_report
 
 _num_classes = 4
@@ -51,7 +44,7 @@ eff_net_sizes = {
     'eff_v2_large': (480, 480)
 }
 
-BASE_PATH = "./test_set_reports"
+BASE_PATH = "./"
 
 
 def calculate_test_accuracy(
