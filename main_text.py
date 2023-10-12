@@ -332,14 +332,6 @@ if __name__ == '__main__':
         tokenizer_text=_tokenizer,
         transform=Transforms(img_transf=get_dummy_pipeline()))
 
-    # aux = [args.dataset_folder_name, VAL_DATASET_PATH]
-    # dataset_folder = '_'.join(aux)
-    # test_data = CustomImageTextFolder(
-    #     root=os.path.join(BASE_PATH, dataset_folder),
-    #     tokens_max_len=_max_len,
-    #     tokenizer_text=_tokenizer,
-    #     transform=Transforms(img_transf=get_dummy_pipeline()))
-
     _num_workers = 8
 
     data_loader_train = torch.utils.data.DataLoader(dataset=train_data,
@@ -353,12 +345,6 @@ if __name__ == '__main__':
                                                   shuffle=True,
                                                   num_workers=_num_workers,
                                                   pin_memory=True)
-
-    # data_loader_test = torch.utils.data.DataLoader(dataset=test_data,
-    #                                                batch_size=_batch_size,
-    #                                                shuffle=True,
-    #                                                num_workers=_num_workers,
-    #                                                pin_memory=True)
 
     print(f"Total num of texts: {len(train_data)}")
     for i in range(_num_classes):
@@ -436,16 +422,6 @@ if __name__ == '__main__':
         print("Val set accuracy on epoch {}: {:.3f} ".format(
             epoch, val_accuracy))
         val_accuracy_history.append(val_accuracy)
-
-        # print("Starting test accuracy calculation for epoch {}".format(epoch))
-        # test_accuracy = calculate_set_accuracy(global_model,
-        #                                       data_loader_test,
-        #                                       len(data_loader_test.dataset),
-        #                                       device,
-        #                                       _batch_size)
-
-        # print("Train set accuracy on epoch {}: {:.3f}".format(epoch, test_accuracy))
-        # test_accuracy_history.append(test_accuracy)
 
         wandb.log({'epoch': epoch,
                    'epoch_time_seconds': elapsed_time,
@@ -532,18 +508,6 @@ if __name__ == '__main__':
             print("Fine Tuning: Val set accuracy on epoch {}: {:.3f}".format(
                 epoch, val_accuracy))
             val_accuracy_history.append(val_accuracy)
-
-            # print(
-            #     "Fine Tuning: starting test accuracy calculation for epoch {}".format(epoch))
-            # test_accuracy = calculate_set_accuracy(global_model,
-            #                                       data_loader_test,
-            #                                       len(data_loader_test.dataset),
-            #                                       device,
-            #                                       _batch_size)
-
-            # print("Fine Tuning: Test set accuracy on epoch {}: {:.3f}".format(
-            #     epoch, test_accuracy))
-            # test_accuracy_history.append(test_accuracy)
 
             wandb.log({'epoch': epoch,
                        'epoch_time_seconds': elapsed_time,

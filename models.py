@@ -237,3 +237,22 @@ def VisionB16(num_classes=4, transfer_learning=False):
                                  out_features=num_classes)
 
     return model
+
+def VisionL16(num_classes=4, transfer_learning=False):
+
+    if transfer_learning:
+        _weights = 'IMAGENET1K_V1'
+    else:
+        _weights = None
+
+    model = vit_l_16(weights=_weights)
+
+    if transfer_learning:
+        for param in model.parameters():
+            param.requires_grad = False
+
+    _in_features = model.heads.head.in_features
+    model.heads.head = nn.Linear(in_features=_in_features,
+                                 out_features=num_classes)
+
+    return model

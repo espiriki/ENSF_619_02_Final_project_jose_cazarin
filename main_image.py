@@ -268,6 +268,12 @@ if __name__ == '__main__':
         input_size = eff_net_sizes[model]
         _batch_size = 256
         _batch_size_FT = 42
+    elif model == "b5":
+        global_model = EffNetB5(_num_classes, args.tl)
+        input_size = eff_net_sizes[model]
+        _batch_size = 128
+        _batch_size_FT = 16
+        args.acc_steps = 2
     elif model == "eff_v2_small":
         global_model = EffNetV2_S(_num_classes, args.tl)
         input_size = eff_net_sizes[model]
@@ -288,27 +294,41 @@ if __name__ == '__main__':
     elif model == "res18":
         global_model = ResNet18(_num_classes, args.tl)
         input_size = (448, 448)
-        _batch_size = 256
+        _batch_size = 128
+        _batch_size_FT = 224
     elif model == "res50":
         global_model = ResNet50(_num_classes, args.tl)
         input_size = (448, 448)
-        _batch_size = 96
+        _batch_size = 64
+        _batch_size_FT = 80
     elif model == "res152":
         global_model = ResNet152(_num_classes, args.tl)
         input_size = (448, 448)
-        _batch_size = 32
+        _batch_size = 64
+        _batch_size_FT = 38
+        args.acc_steps = 2
     elif model == "mb":
         global_model = MBNetLarge(_num_classes, args.tl)
         input_size = (320, 320)
         _batch_size = 256
+        _batch_size_FT = 256
     elif model == "convnext":
         global_model = ConvNextBase(_num_classes, args.tl)
         input_size = (224, 224)
         _batch_size = 128
-    elif model == "transformer":
+        _batch_size_FT = 32
+        args.acc_steps = 2
+    elif model == "transformer_B16":
         global_model = VisionB16(_num_classes, args.tl)
         input_size = (224, 224)
         _batch_size = 128
+        _batch_size_FT = 96
+    elif model == "transformer_L16":
+        global_model = VisionL16(_num_classes, args.tl)
+        input_size = (224, 224)
+        _batch_size = 128
+        _batch_size_FT = 24
+        args.acc_steps = 3
     else:
         print("Invalid Model: {}".format(model))
         sys.exit(1)
@@ -342,6 +362,7 @@ if __name__ == '__main__':
         fraction_lr=args.fraction_lr,
         architecture=args.image_model,
         dataset_id="garbage",
+        prob_augmentations=args.prob_aug,
     )
 
     now = datetime.now()
@@ -543,16 +564,6 @@ if __name__ == '__main__':
 
         print("Val set accuracy on epoch {}: {:.3f}".format(epoch, val_accuracy))
         val_accuracy_history.append(val_accuracy)
-
-        # print("Starting test accuracy calculation for epoch {}".format(epoch))
-        # test_accuracy, _ = calculate_set_accuracy(global_model,
-        #                                       data_loader_test,
-        #                                       len(data_loader_test.dataset),
-        #                                       device,
-        #                                       _batch_size)
-
-        # print("Train set accuracy on epoch {}: {:.3f}".format(epoch, val_accuracy))
-        # test_accuracy_history.append(test_accuracy)
 
         wandb.log({'epoch': epoch,
                    'epoch_time_seconds': elapsed_time,
