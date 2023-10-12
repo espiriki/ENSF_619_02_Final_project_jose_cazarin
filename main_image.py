@@ -562,7 +562,8 @@ if __name__ == '__main__':
                                                           device,
                                                           _batch_size)
 
-        print("Val set accuracy on epoch {}: {:.3f}".format(epoch, val_accuracy))
+        print("Val set accuracy on epoch {}: {:.3f}".format(
+            epoch, val_accuracy))
         val_accuracy_history.append(val_accuracy)
 
         wandb.log({'epoch': epoch,
@@ -652,19 +653,6 @@ if __name__ == '__main__':
                 epoch, val_accuracy))
 
             val_accuracy_history.append(val_accuracy)
-
-            # print(
-            #     "Fine Tuning: starting test accuracy calculation for epoch {}".format(epoch))
-            # test_accuracy, _ = calculate_set_accuracy(global_model,
-            #                                         data_loader_test,
-            #                                         len(data_loader_test.dataset),
-            #                                         device,
-            #                                         _batch_size)
-
-            # print("Fine Tuning: Test set accuracy on epoch {}: {:.3f}".format(
-            #     epoch, test_accuracy))
-
-            # test_accuracy_history.append(test_accuracy)
 
             wandb.log({'epoch': epoch,
                        'epoch_time_seconds': elapsed_time,
