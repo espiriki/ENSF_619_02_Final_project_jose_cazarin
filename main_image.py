@@ -322,7 +322,7 @@ if __name__ == '__main__':
         global_model = VisionB16(_num_classes, args.tl)
         input_size = (224, 224)
         _batch_size = 128
-        _batch_size_FT = 96
+        _batch_size_FT = 200
     elif model == "transformer_L16":
         global_model = VisionL16(_num_classes, args.tl)
         input_size = (224, 224)

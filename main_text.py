@@ -28,13 +28,13 @@ from torchmetrics.classification import ConfusionMatrix
 import ssl
 from sklearn.model_selection import train_test_split as tts
 from sklearn.metrics import classification_report
+from datetime import datetime
 
 _num_classes = 4
 
 BASE_PATH = "/project/def-rmsouza/jocazar/"
-TRAIN_DATASET_PATH = "train_set"
-VAL_DATASET_PATH = "val_set"
-TEST_DATASET_PATH = "test_set"
+TRAIN_DATASET_PATH = "Train"
+VAL_DATASET_PATH = "Val"
 
 
 class Transforms:
@@ -239,20 +239,24 @@ if __name__ == '__main__':
     print("Text Model: {}".format(args.text_model))
 
     global_model = DistilBert(_num_classes, args.model_dropout)
-    _batch_size = 32
+    _batch_size = 128
+    _batch_size_FT = 64
 
     # 66 365 956
     if args.text_model == "distilbert":
         global_model = DistilBert(_num_classes, args.model_dropout)
-        _batch_size = 64
+        _batch_size = 128
+        _batch_size_FT=90
     # 124 648 708
     elif args.text_model == "roberta":
         global_model = Roberta(_num_classes, args.model_dropout)
-        _batch_size = 32
+        _batch_size = 128
+        _batch_size_FT = 46
     # 109 485 316
     elif args.text_model == "bert":
         global_model = Bert(_num_classes, args.model_dropout)
-        _batch_size = 32
+        _batch_size = 128
+        _batch_size_FT = 64
     # 407 345 156 parameters
     elif args.text_model == "bart":
         global_model = Bart(_num_classes, args.model_dropout)
@@ -294,10 +298,12 @@ if __name__ == '__main__':
         dataset_id="garbage",
     )
 
+    now = datetime.now()
+    date_time = now.strftime("%m/%d/%Y, %H:%M:%S")
     run = wandb.init(
         project="Garbage Classification Text",
         config=config,
-        name="Text model: " + str(args.text_model)
+        name="Text model: " + str(args.text_model) + " " + str(date_time)
     )
 
     wandb.watch(global_model)
@@ -308,7 +314,8 @@ if __name__ == '__main__':
 
     aux = [args.dataset_folder_name, TRAIN_DATASET_PATH]
     dataset_folder = '_'.join(aux)
-    train_dataset_path = root = os.path.join(BASE_PATH, dataset_folder)
+    train_dataset_path = \
+    os.path.join(BASE_PATH, dataset_folder)
 
     class_weights = get_class_weights(train_dataset_path)
     print("Class weights: {}".format(class_weights))
@@ -332,7 +339,7 @@ if __name__ == '__main__':
         tokenizer_text=_tokenizer,
         transform=Transforms(img_transf=get_dummy_pipeline()))
 
-    _num_workers = 8
+    _num_workers = 16
 
     data_loader_train = torch.utils.data.DataLoader(dataset=train_data,
                                                     batch_size=_batch_size,
@@ -345,6 +352,18 @@ if __name__ == '__main__':
                                                   shuffle=True,
                                                   num_workers=_num_workers,
                                                   pin_memory=True)
+    
+    data_loader_train_FT = torch.utils.data.DataLoader(dataset=train_data,
+                                                       batch_size=_batch_size_FT,
+                                                       shuffle=True,
+                                                       num_workers=_num_workers,
+                                                       pin_memory=True)
+
+    data_loader_val_FT = torch.utils.data.DataLoader(dataset=val_data,
+                                                     batch_size=_batch_size_FT,
+                                                     shuffle=True,
+                                                     num_workers=_num_workers,
+                                                     pin_memory=True)    
 
     print(f"Total num of texts: {len(train_data)}")
     for i in range(_num_classes):
@@ -428,6 +447,7 @@ if __name__ == '__main__':
                    'train_loss_avg': train_loss_avg,
                    'train_accuracy_history': train_accuracy,
                    'val_accuracy_history': val_accuracy,
+                   'max_val_acc': max_val_accuracy,
                    'black_val_precision': val_report["black"]["precision"],
                    'blue_val_precision': val_report["blue"]["precision"],
                    'green_val_precision': val_report["green"]["precision"],
@@ -462,8 +482,8 @@ if __name__ == '__main__':
             # train using a small learning rate
             ft_num_batches, ft_train_loss_per_batch = run_one_epoch(epoch,
                                                                     global_model,
-                                                                    data_loader_train,
-                                                                    len(data_loader_train.dataset),
+                                                                    data_loader_train_FT,
+                                                                    len(train_data),
                                                                     device,
                                                                     _batch_size,
                                                                     optimizer,
@@ -488,8 +508,8 @@ if __name__ == '__main__':
             print(
                 "Fine Tuning: starting train accuracy calculation for epoch {}".format(epoch))
             train_accuracy, _ = calculate_set_accuracy(global_model,
-                                                       data_loader_train,
-                                                       len(data_loader_train.dataset),
+                                                       data_loader_train_FT,
+                                                       len(train_data),
                                                        device,
                                                        _batch_size)
 
@@ -500,8 +520,8 @@ if __name__ == '__main__':
             print(
                 "Fine Tuning: starting val accuracy calculation for epoch {}".format(epoch))
             val_accuracy, val_report = calculate_set_accuracy(global_model,
-                                                              data_loader_val,
-                                                              len(data_loader_val.dataset),
+                                                              data_loader_val_FT,
+                                                              len(val_data),
                                                               device,
                                                               _batch_size)
 
