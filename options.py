@@ -26,8 +26,8 @@ def args_parser():
                         help='number of fine tuning epochs')
     parser.add_argument('--fraction_lr', type=float, default=5,
                         help='value to divide the regular LR for to use in fine tuning')
-    parser.add_argument('--image_model', type=str, default='b4', help='model name')
-    parser.add_argument('--text_model', type=str, default='distilbert', help='model name')
+    parser.add_argument('--image_model', type=str, default='', help='model name')
+    parser.add_argument('--text_model', type=str, default='', help='model name')
 
     parser.add_argument('--model_path', type=str, default="",
                         help='Model file to calculate accuracy against the test set. Must match the model architecture select with the -model parameter')
