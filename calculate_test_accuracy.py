@@ -18,6 +18,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sn
 from sklearn.metrics import classification_report
+from CVPR_code.text_models import *
+from CVPR_code.CustomImageTextFolder import *
 
 _num_classes = 4
 
@@ -53,7 +55,10 @@ def calculate_test_accuracy(
         len_test_data,
         hw_device,
         batch_size,
-        args):
+        args,
+        is_image_model):
+
+    print("is_image_model:", is_image_model)
 
     correct = 0
     n_batches = math.ceil((len_test_data/batch_size))
@@ -63,12 +68,20 @@ def calculate_test_accuracy(
     confmat = ConfusionMatrix(task="multiclass", num_classes=4)
     with torch.no_grad():
 
-        for batch_idx, (images, labels) in enumerate(data_loader):
+        for batch_idx, (data, labels) in enumerate(data_loader):
+            if is_image_model:
+                images = data['image']['raw_image']
+                images, labels = images.to(hw_device), labels.to(hw_device)
 
-            images, labels = images.to(hw_device), labels.to(hw_device)
+                outputs = model(images)
+            else:
+                texts = data['text']
+                input_token_ids = texts['tokens'].to(hw_device)
+                attention_mask = texts['attention_mask'].to(hw_device)
+                labels = labels.to(hw_device)
 
-            # Inference
-            outputs = model(images)
+                outputs = model(_input_ids=input_token_ids,
+                                _attention_mask=attention_mask)
 
             # Prediction
             _, pred_labels = torch.max(outputs, 1)
@@ -180,6 +193,9 @@ if __name__ == '__main__':
         global_model = VisionB16(_num_classes, args.tl)
         input_size = (224, 224)
         _batch_size = 256
+    elif args.text_model == "distilbert":
+        global_model = DistilBert(_num_classes, args.model_dropout)
+        _batch_size = 64
     else:
         print("Invalid Model: {}".format(args.model))
         sys.exit(1)
@@ -192,8 +208,20 @@ if __name__ == '__main__':
 
     global_model.eval()
 
-    WIDTH = input_size[0]
-    HEIGHT = input_size[1]
+    model_name = ""
+    _tokenizer = None
+    _max_len = None
+    if args.text_model != "":
+        model_name = args.text_model
+        WIDTH = 128
+        HEIGHT = 128
+        _tokenizer = global_model.get_tokenizer()
+        _max_len = global_model.get_max_token_size()
+    if args.image_model != "":
+        model_name = args.image_model
+        WIDTH = input_size[0]
+        HEIGHT = input_size[1]
+
     AR_INPUT = WIDTH / HEIGHT
 
     # ImageNet mean and std
@@ -212,8 +240,10 @@ if __name__ == '__main__':
         a_pytorch.transforms.ToTensorV2()
     ])
 
-    test_data = torchvision.datasets.ImageFolder(root=args.dataset_folder_name,
-                                                 transform=Transforms(img_transf=TEST_PIPELINE))
+    test_data = CustomImageTextFolder(root=args.dataset_folder_name,
+                                      tokens_max_len=_max_len,
+                                      tokenizer_text=_tokenizer,
+                                      transform=Transforms(img_transf=TEST_PIPELINE))
 
     print("Num of test images: {}".format(len(test_data)))
 
@@ -229,11 +259,20 @@ if __name__ == '__main__':
     if "false" in args.model_path or "False" in args.model_path:
         args.balance_weights = False
 
-    test_accuracy, test_report = calculate_test_accuracy(global_model,
-                                                         data_loader_test,
-                                                         len(test_data),
-                                                         device,
-                                                         _batch_size, args)
+    if model_name == "distilbert":
+
+        test_accuracy, test_report = calculate_test_accuracy(global_model,
+                                                             data_loader_test,
+                                                             len(test_data),
+                                                             device,
+                                                             _batch_size, args, False)
+
+    else:
+        test_accuracy, test_report = calculate_test_accuracy(global_model,
+                                                             data_loader_test,
+                                                             len(test_data),
+                                                             device,
+                                                             _batch_size, args, True)
 
     print(test_data.class_to_idx)
     print("Test accuracy: {:.2f} %".format(test_accuracy))
