@@ -382,7 +382,7 @@ if __name__ == '__main__':
         mean_train_dataset, std_train_dataset = calculate_mean_std_train_dataset(
             train_dataset_path, STATS_PIPELINE)
     else:
-        # ImageNet mean and std        
+        # ImageNet mean and std
         mean_train_dataset = [0.485, 0.456, 0.406]
         std_train_dataset = [0.229, 0.224, 0.225]
 
