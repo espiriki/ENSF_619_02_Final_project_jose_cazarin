@@ -242,17 +242,17 @@ if __name__ == '__main__':
     _batch_size = 128
     _batch_size_FT = 64
 
-    # 66 365 956
+    # 66 365 956 parameters
     if args.text_model == "distilbert":
         global_model = DistilBert(_num_classes, args.model_dropout)
         _batch_size = 128
-        _batch_size_FT=90
-    # 124 648 708
+        _batch_size_FT = 86
+    # 124 648 708 parameters
     elif args.text_model == "roberta":
         global_model = Roberta(_num_classes, args.model_dropout)
         _batch_size = 128
-        _batch_size_FT = 46
-    # 109 485 316
+        _batch_size_FT = 42
+    # 109 485 316 parameters
     elif args.text_model == "bert":
         global_model = Bert(_num_classes, args.model_dropout)
         _batch_size = 128
@@ -442,6 +442,16 @@ if __name__ == '__main__':
             epoch, val_accuracy))
         val_accuracy_history.append(val_accuracy)
 
+        if val_accuracy > max_val_accuracy:
+            print("Best model obtained based on Val Acc. Saving it!")
+            save_model_weights(global_model, args.text_model,
+                               epoch, val_accuracy, device, False, args.balance_weights, args.opt)
+            max_val_accuracy = val_accuracy
+            best_epoch = epoch
+        else:
+            print("Not saving model on epoch {}, best Val Acc so far on epoch {}: {:.3f}".format(epoch, best_epoch,
+                                                                                                 max_val_accuracy))
+
         wandb.log({'epoch': epoch,
                    'epoch_time_seconds': elapsed_time,
                    'train_loss_avg': train_loss_avg,
@@ -452,16 +462,6 @@ if __name__ == '__main__':
                    'blue_val_precision': val_report["blue"]["precision"],
                    'green_val_precision': val_report["green"]["precision"],
                    'ttr_val_precision': val_report["ttr"]["precision"]})
-
-        if val_accuracy > max_val_accuracy:
-            print("Best model obtained based on Val Acc. Saving it!")
-            save_model_weights(global_model, args.text_model,
-                               epoch, val_accuracy, device, False, args.balance_weights, args.opt)
-            max_val_accuracy = val_accuracy
-            best_epoch = epoch
-        else:
-            print("Not saving model on epoch {}, best Val Acc so far on epoch {}: {:.3f}".format(epoch, best_epoch,
-                                                                                                 max_val_accuracy))
 
     print("Starting Fine tuning!!")
     # Fine tuning loop
@@ -529,16 +529,6 @@ if __name__ == '__main__':
                 epoch, val_accuracy))
             val_accuracy_history.append(val_accuracy)
 
-            wandb.log({'epoch': epoch,
-                       'epoch_time_seconds': elapsed_time,
-                       'train_loss_avg': train_loss_avg,
-                       'train_accuracy_history': train_accuracy,
-                       'val_accuracy_history': val_accuracy,
-                       'black_val_precision': val_report["black"]["precision"],
-                       'blue_val_precision': val_report["blue"]["precision"],
-                       'green_val_precision': val_report["green"]["precision"],
-                       'ttr_val_precision': val_report["ttr"]["precision"]})
-
             if val_accuracy > max_val_accuracy:
                 print("Fine Tuning: best model obtained based on Val Acc. Saving it!")
                 save_model_weights(global_model, args.text_model,
@@ -548,6 +538,17 @@ if __name__ == '__main__':
             else:
                 print("Fine Tuning: not saving model, best Val Acc so far on epoch {}: {:.3f}".format(best_epoch,
                                                                                                       max_val_accuracy))
+
+            wandb.log({'epoch': epoch,
+                       'epoch_time_seconds': elapsed_time,
+                       'train_loss_avg': train_loss_avg,
+                       'train_accuracy_history': train_accuracy,
+                       'val_accuracy_history': val_accuracy,
+                       'max_val_acc': max_val_accuracy,
+                       'black_val_precision': val_report["black"]["precision"],
+                       'blue_val_precision': val_report["blue"]["precision"],
+                       'green_val_precision': val_report["green"]["precision"],
+                       'ttr_val_precision': val_report["ttr"]["precision"]})
 
     # Finished training, save data
     with open(BASE_PATH + 'save/train_loss_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(

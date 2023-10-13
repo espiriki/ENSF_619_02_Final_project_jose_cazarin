@@ -258,55 +258,65 @@ if __name__ == '__main__':
     _batch_size_FT = 42
 
     model = args.image_model
+    # 4 012 672 parameters
     if model == "b0":
         global_model = EffNetB0(_num_classes, args.tl)
         input_size = eff_net_sizes[model]
         _batch_size = 256
         _batch_size_FT = 256
+    # 17 555 788 parameters
     elif model == "b4":
         global_model = EffNetB4(_num_classes, args.tl)
         input_size = eff_net_sizes[model]
         _batch_size = 256
         _batch_size_FT = 42
+    # 17 555 788 parameters
     elif model == "b5":
         global_model = EffNetB5(_num_classes, args.tl)
         input_size = eff_net_sizes[model]
         _batch_size = 128
         _batch_size_FT = 16
         args.acc_steps = 2
+    # 20 182 612 parameters
     elif model == "eff_v2_small":
         global_model = EffNetV2_S(_num_classes, args.tl)
         input_size = eff_net_sizes[model]
         _batch_size = 96
         _batch_size_FT = 64
+    # 52 863 480 parameters
     elif model == "eff_v2_medium":
         global_model = EffNetV2_M(_num_classes, args.tl)
         input_size = eff_net_sizes[model]
         _batch_size = 128
         _batch_size_FT = 24
         args.acc_steps = 12
+    # 117 239 396 parameters
     elif model == "eff_v2_large":
         global_model = EffNetV2_L(_num_classes, args.tl)
         input_size = eff_net_sizes[model]
         _batch_size = 96
         _batch_size_FT = 12
         args.acc_steps = 6
+    # 11 178 564 parameters
     elif model == "res18":
         global_model = ResNet18(_num_classes, args.tl)
         input_size = (448, 448)
         _batch_size = 128
         _batch_size_FT = 224
+    # 23 516 228 parameters
     elif model == "res50":
         global_model = ResNet50(_num_classes, args.tl)
         input_size = (448, 448)
         _batch_size = 64
         _batch_size_FT = 80
+    # 58 152 004 parameters
     elif model == "res152":
         global_model = ResNet152(_num_classes, args.tl)
         input_size = (448, 448)
         _batch_size = 64
         _batch_size_FT = 38
         args.acc_steps = 2
+    # 4 207 156 parameters
     elif model == "mb":
         global_model = MBNetLarge(_num_classes, args.tl)
         input_size = (320, 320)
@@ -316,8 +326,8 @@ if __name__ == '__main__':
         global_model = ConvNextBase(_num_classes, args.tl)
         input_size = (224, 224)
         _batch_size = 128
-        _batch_size_FT = 32
-        args.acc_steps = 2
+        _batch_size_FT = 120
+        args.acc_steps = 0
     elif model == "transformer_B16":
         global_model = VisionB16(_num_classes, args.tl)
         input_size = (224, 224)
@@ -327,7 +337,7 @@ if __name__ == '__main__':
         global_model = VisionL16(_num_classes, args.tl)
         input_size = (224, 224)
         _batch_size = 128
-        _batch_size_FT = 24
+        _batch_size_FT = 52
         args.acc_steps = 3
     else:
         print("Invalid Model: {}".format(model))

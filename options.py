@@ -16,7 +16,7 @@ def args_parser():
                         help='learning rate')
     parser.add_argument('--reg', type=float, default=1e-2,
                         help='regularization rate')
-    parser.add_argument('--model_dropout', type=float, default=0.3,
+    parser.add_argument('--model_dropout', type=float, default=0.6,
                         help='model FC layer dropout')
     parser.add_argument(
         '--tl', action=argparse.BooleanOptionalAction, default=True, help="Whether to use transfer learning or not")
