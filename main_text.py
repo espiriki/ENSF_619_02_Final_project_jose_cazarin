@@ -256,11 +256,14 @@ if __name__ == '__main__':
     elif args.text_model == "bert":
         global_model = Bert(_num_classes, args.model_dropout)
         _batch_size = 128
-        _batch_size_FT = 64
+        _batch_size_FT = 26
+        args.acc_steps = 3
     # 407 345 156 parameters
     elif args.text_model == "bart":
         global_model = Bart(_num_classes, args.model_dropout)
+        _batch_size = 256
         _batch_size = 4
+        args.acc_steps = 12
     # 124 442 884 parameters
     elif args.text_model == "gpt2":
         global_model = GPT2(_num_classes, args.model_dropout)
