@@ -166,7 +166,7 @@ if __name__ == '__main__':
         _batch_size = 4
     # 124 442 884 parameters
     elif args.text_model == "gpt2":
-        global_model = GPT2(_num_classes, args.model_dropout)
+        global_model = GPT2(_num_classes)
         _batch_size = 32
     else:
         print("Invalid Model: {}".format(args.text_model))

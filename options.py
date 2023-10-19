@@ -14,6 +14,8 @@ def args_parser():
                         help="dataset folder name in the base location")                        
     parser.add_argument('--lr', type=float, default=0.001,
                         help='learning rate')
+    parser.add_argument('--image_text_dropout', type=float, default=0.33,
+                        help='change of dropping either text or image')
     parser.add_argument('--reg', type=float, default=1e-2,
                         help='regularization rate')
     parser.add_argument('--model_dropout', type=float, default=0.6,
