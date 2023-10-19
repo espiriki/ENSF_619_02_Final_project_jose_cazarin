@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
-from transformers import DistilBertModel, DistilBertConfig
+from transformers import DistilBertForSequenceClassification, DistilBertConfig
 from torchvision.models import *
 from transformers import DistilBertTokenizer
 from random import randint
 import random
+
 
 def decision(probability):
     value = random.random()
@@ -18,18 +19,24 @@ def eff_net_v2():
     for param in model.parameters():
         param.requires_grad = False
 
-    model.classifier = nn.Sequential(*[model.classifier[i] for i in range(1)])
-
+    # model.classifier = nn.Sequential(*[model.classifier[i] for i in range(1)])
+    model.classifier[1] = torch.nn.Identity()
+    
     return model
+
 
 def distilbert():
 
-    model = DistilBertModel.from_pretrained("distilbert-base-uncased")
+    model = DistilBertForSequenceClassification.from_pretrained(
+        "distilbert-base-uncased")
 
     for param in model.parameters():
         param.requires_grad = False
 
+    model.classifier = torch.nn.Identity()
+
     return model
+
 
 class EffV2MediumAndDistilbert(nn.Module):
 
@@ -177,7 +184,7 @@ class EffV2MediumAndDistilbert(nn.Module):
 
             if not remove_image and not remove_text:
                 print("using both on EVAL")
-                pass                
+                pass
 
         else:
             if decision(self.prob_image_text_dropout):
@@ -197,9 +204,8 @@ class EffV2MediumAndDistilbert(nn.Module):
             input_ids=_input_ids,
             attention_mask=_attention_mask
         )
-        hidden_state = text_output[0]
-        text_features = hidden_state[:, 0]
 
+        text_features = text_output[0]
         image_features = self.image_model(_images)
 
         # 256 * bs
@@ -247,6 +253,6 @@ class EffV2MediumAndDistilbert(nn.Module):
 
     def get_image_size(self):
         return (480, 480)
-    
+
     def get_max_token_size(self):
-        return DistilBertConfig().max_position_embeddings    
+        return DistilBertConfig().max_position_embeddings
