@@ -6,6 +6,7 @@ from transformers import DistilBertTokenizer
 from random import randint
 import random
 
+
 def decision(probability):
     value = random.random()
     return value < probability
@@ -22,6 +23,7 @@ def eff_net_v2():
 
     return model
 
+
 def distilbert():
 
     model = DistilBertModel.from_pretrained("distilbert-base-uncased")
@@ -31,9 +33,14 @@ def distilbert():
 
     return model
 
+
 class EffV2MediumAndDistilbert(nn.Module):
 
-    def __init__(self, n_classes, drop_ratio, image_text_dropout):
+    def __init__(self,
+                 n_classes,
+                 drop_ratio,
+                 image_text_dropout,
+                 img_prob_dropout):
         super(EffV2MediumAndDistilbert, self).__init__()
 
         self.text_model_name = "distilbert-base-uncased"
@@ -46,6 +53,7 @@ class EffV2MediumAndDistilbert(nn.Module):
         self.image_dropout = nn.Dropout2d(p=1.0)
         self.text_dropout = nn.Dropout1d(p=1.0)
         self.prob_image_text_dropout = image_text_dropout
+        self.img_dropout_prob = img_prob_dropout
 
         # 1280 from image + 768 from text
 
@@ -120,7 +128,7 @@ class EffV2MediumAndDistilbert(nn.Module):
 
         else:
             if decision(self.prob_image_text_dropout):
-                image_or_text = decision(0.5)
+                image_or_text = decision(self.img_dropout_prob)
                 if image_or_text:
                     print("    zeroing images")
                     _images = self.image_dropout(_images)
@@ -177,7 +185,7 @@ class EffV2MediumAndDistilbert(nn.Module):
 
             if not remove_image and not remove_text:
                 print("using both on EVAL")
-                pass                
+                pass
 
         else:
             if decision(self.prob_image_text_dropout):
@@ -247,6 +255,6 @@ class EffV2MediumAndDistilbert(nn.Module):
 
     def get_image_size(self):
         return (480, 480)
-    
+
     def get_max_token_size(self):
-        return DistilBertConfig().max_position_embeddings    
+        return DistilBertConfig().max_position_embeddings

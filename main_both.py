@@ -38,10 +38,10 @@ TRAIN_DATASET_PATH = "Train"
 VAL_DATASET_PATH = "Val"
 
 mode_config_dict = {
-    'image_only': {"remove_text":True,"remove_image":False},
-    'text_only': {"remove_text":False,"remove_image":True},
-    'both': {"remove_text":False,"remove_image":False}
-    }
+    'image_only': {"remove_text": True, "remove_image": False},
+    'text_only': {"remove_text": False, "remove_image": True},
+    'both': {"remove_text": False, "remove_image": False}
+}
 
 
 class Transforms:
@@ -100,8 +100,8 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
 
         # Inference
         model_outputs = model(_input_ids=input_token_ids,
-                            _attention_mask=attention_mask,
-                            _images=images)
+                              _attention_mask=attention_mask,
+                              _images=images)
 
         loss = criterion(model_outputs, labels)
 
@@ -155,11 +155,11 @@ def calculate_set_accuracy(
         for batch_idx, (data, labels) in enumerate(data_loader):
 
             images = data['image']['raw_image']
-            
+
             texts = data['text']
             input_token_ids = texts['tokens'].to(device)
             attention_mask = texts['attention_mask'].to(device)
-            
+
             images = images.to(device)
             labels = labels.to(device)
 
@@ -255,9 +255,10 @@ if __name__ == '__main__':
     global_model = EffV2MediumAndDistilbert(
         _num_classes,
         args.model_dropout,
-        args.image_text_dropout)
+        args.image_text_dropout,
+        args.image_prob_dropout)
 
-    _batch_size = 128
+    _batch_size = 64
     _batch_size_FT = 20
     args.acc_steps = 4
 
@@ -270,6 +271,8 @@ if __name__ == '__main__':
     print("Using class weights: {}".format(args.balance_weights))
     print("Optimizer: {}".format(args.opt))
     print("Grad Acc steps: {}".format(args.acc_steps))
+    print("Img dropout prob: {}".format(args.image_prob_dropout))
+    print("Modality dropout prob: {}".format(args.image_text_dropout))
 
     print("Training for {} epochs".format(args.epochs))
     if args.tl is True:
@@ -290,6 +293,8 @@ if __name__ == '__main__':
         architecture_image=args.text_model,
         architecture_text=args.text_model,
         dataset_id="garbage",
+        modality_dropout_prob=args.image_text_dropout,
+        img_dropout_prob=args.image_prob_dropout,
     )
 
     now = datetime.now()
@@ -297,7 +302,10 @@ if __name__ == '__main__':
     run = wandb.init(
         project="Garbage Classification Both",
         config=config,
-        name="Text model: " + str(args.text_model) + " " + str(date_time)
+        name="Both models: " +
+        str(args.text_model) +
+        str(args.image_model) +
+        " " + str(date_time)
     )
 
     wandb.watch(global_model)
@@ -306,17 +314,17 @@ if __name__ == '__main__':
         print("Using {} GPUs".format(torch.cuda.device_count()))
         global_model = nn.DataParallel(global_model)
 
-    REMOVE="dataset_with_text"
+    REMOVE = "dataset_with_text"
 
     # EffNetV2 Medium image size
     size = global_model.get_image_size()
     WIDTH = size[0]
     HEIGHT = size[1]
     AR_INPUT = WIDTH / HEIGHT
-    
+
     _tokenizer = global_model.get_tokenizer()
     _max_len = global_model.get_max_token_size()
-    
+
     # Imagenet mean and std
     mean_train_dataset = [0.485, 0.456, 0.406]
     std_train_dataset = [0.229, 0.224, 0.225]
@@ -349,7 +357,7 @@ if __name__ == '__main__':
         normalize_transform,
         a_pytorch.transforms.ToTensorV2()
     ])
-    
+
     VALIDATION_PIPELINE = A.Compose([
         keep_aspect_ratio.PadToMaintainAR(aspect_ratio=AR_INPUT),
         A.Resize(width=WIDTH,
@@ -357,12 +365,12 @@ if __name__ == '__main__':
                  interpolation=cv2.INTER_LINEAR),
         normalize_transform,
         a_pytorch.transforms.ToTensorV2()
-    ]) 
+    ])
 
     aux = [args.dataset_folder_name, TRAIN_DATASET_PATH]
     dataset_folder = '_'.join(aux)
     train_dataset_path = \
-    os.path.join(BASE_PATH, REMOVE, dataset_folder)
+        os.path.join(BASE_PATH, REMOVE, dataset_folder)
 
     class_weights = get_class_weights(train_dataset_path)
     print("Class weights: {}".format(class_weights))
@@ -399,7 +407,7 @@ if __name__ == '__main__':
                                                   shuffle=True,
                                                   num_workers=_num_workers,
                                                   pin_memory=True)
-    
+
     data_loader_train_FT = torch.utils.data.DataLoader(dataset=train_data,
                                                        batch_size=_batch_size_FT,
                                                        shuffle=True,
@@ -410,7 +418,7 @@ if __name__ == '__main__':
                                                      batch_size=_batch_size_FT,
                                                      shuffle=True,
                                                      num_workers=_num_workers,
-                                                     pin_memory=True)    
+                                                     pin_memory=True)
 
     print(f"Total num of samples: {len(train_data)}")
     for i in range(_num_classes):
@@ -512,7 +520,6 @@ if __name__ == '__main__':
             print("Not saving model on epoch {}, best Val Acc so far on epoch {}: {:.3f}".format(epoch, best_epoch,
                                                                                                  max_val_accuracy))
 
-
         eval_mode = True
         print("Calculating val set accuracy with image only on epoch {}".format(epoch))
         val_acc_image_only, _ = calculate_set_accuracy(global_model,
@@ -522,7 +529,7 @@ if __name__ == '__main__':
                                                        _batch_size,
                                                        mode_config_dict['image_only'],
                                                        eval_mode)
-        
+
         print("Calculating val set accuracy with text only on epoch {}".format(epoch))
         val_acc_text_only, _ = calculate_set_accuracy(global_model,
                                                       data_loader_val,
@@ -530,7 +537,16 @@ if __name__ == '__main__':
                                                       device,
                                                       _batch_size,
                                                       mode_config_dict['text_only'],
-                                                      eval_mode)   
+                                                      eval_mode)
+        
+        print("Calculating val set accuracy with BOTH on epoch {}".format(epoch))
+        val_acc_both, _ = calculate_set_accuracy(global_model,
+                                                      data_loader_val,
+                                                      len(data_loader_val.dataset),
+                                                      device,
+                                                      _batch_size,
+                                                      mode_config_dict['both'],
+                                                      eval_mode)        
 
         wandb.log({'epoch': epoch,
                    'epoch_time_seconds': elapsed_time,
@@ -539,6 +555,7 @@ if __name__ == '__main__':
                    'val_accuracy_history': val_accuracy,
                    'val_accuracy_text_only_history': val_acc_text_only,
                    'val_accuracy_image_only_history': val_acc_image_only,
+                   'val_accuracy_BOTH_history': val_acc_both,
                    'max_val_acc': max_val_accuracy,
                    'black_val_precision': val_report["black"]["precision"],
                    'blue_val_precision': val_report["blue"]["precision"],
@@ -555,7 +572,7 @@ if __name__ == '__main__':
             param.requires_grad = True
         # set all model parameters to train
         for param in global_model.image_model.parameters():
-            param.requires_grad = True            
+            param.requires_grad = True
 
         # update learning rate of optimizer
         for group in optimizer.param_groups:
@@ -590,12 +607,12 @@ if __name__ == '__main__':
                 epoch, np.min(ft_train_loss_per_batch)))
 
             train_loss_history.append(ft_train_loss_avg)
-            
+
             global_model.text_model.eval()
             global_model.image_model.eval()
             print(
                 "Fine Tuning: starting train accuracy calculation for epoch {}".format(epoch))
-            
+
             eval_mode = False
             # Calculating the train set accuracy with the drop out of images or text
             train_accuracy, _ = calculate_set_accuracy(global_model,
@@ -613,9 +630,9 @@ if __name__ == '__main__':
 
             print(
                 "Fine Tuning: starting val accuracy calculation for epoch {}".format(epoch))
-            
+
             eval_mode = False
-            # Calculating the val set accuracy with the drop out of images or text            
+            # Calculating the val set accuracy with the drop out of images or text
             val_accuracy, val_report = calculate_set_accuracy(global_model,
                                                               data_loader_val_FT,
                                                               len(val_data),
@@ -640,23 +657,25 @@ if __name__ == '__main__':
                                                                                                       max_val_accuracy))
 
             eval_mode = True
-            print("Fine Tuning: calculating val set accuracy with image only on epoch {}".format(epoch))
+            print(
+                "Fine Tuning: calculating val set accuracy with image only on epoch {}".format(epoch))
             val_acc_image_only, _ = calculate_set_accuracy(global_model,
-                                                        data_loader_val_FT,
-                                                        len(val_data),
-                                                        device,
-                                                        _batch_size_FT,
-                                                        mode_config_dict['image_only'],
-                                                        eval_mode)
-            
-            print("Fine Tuning: calculating val set accuracy with text only on epoch {}".format(epoch))
+                                                           data_loader_val_FT,
+                                                           len(val_data),
+                                                           device,
+                                                           _batch_size_FT,
+                                                           mode_config_dict['image_only'],
+                                                           eval_mode)
+
+            print(
+                "Fine Tuning: calculating val set accuracy with text only on epoch {}".format(epoch))
             val_acc_text_only, _ = calculate_set_accuracy(global_model,
-                                                        data_loader_val_FT,
-                                                        len(val_data),
-                                                        device,
-                                                        _batch_size_FT,
-                                                        mode_config_dict['text_only'],
-                                                        eval_mode)  
+                                                          data_loader_val_FT,
+                                                          len(val_data),
+                                                          device,
+                                                          _batch_size_FT,
+                                                          mode_config_dict['text_only'],
+                                                          eval_mode)
 
             wandb.log({'epoch': epoch,
                        'epoch_time_seconds': elapsed_time,
