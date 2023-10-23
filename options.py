@@ -40,7 +40,10 @@ def args_parser():
                         help='Gradient accumulation steps')
     
     parser.add_argument('--acc_steps_FT', type=int, default=0,
-                        help='Gradient accumulation steps')    
+                        help='Gradient accumulation steps')
+
+    parser.add_argument('--num_neurons_FC', type=int, default=256,
+                        help='Num neurons in FC layers')
 
     parser.add_argument('--opt', type=str, default="sgd",
                         help='Optimizer to use')

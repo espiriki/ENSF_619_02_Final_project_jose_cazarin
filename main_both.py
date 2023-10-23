@@ -257,13 +257,15 @@ if __name__ == '__main__':
             _num_classes,
             args.model_dropout,
             args.image_text_dropout,
-            args.image_prob_dropout)
+            args.image_prob_dropout,
+            args.num_neurons_FC)
     elif args.late_fusion == "classic":
         global_model = EffV2MediumAndDistilbertClassic(
             _num_classes,
             args.model_dropout,
             args.image_text_dropout,
-            args.image_prob_dropout)
+            args.image_prob_dropout,
+            args.num_neurons_FC)
     else:
         print("Wrong late fusion strategy: ", args.late_fusion)
         sys.exit(1)
@@ -284,6 +286,8 @@ if __name__ == '__main__':
     print("Img dropout prob: {}".format(args.image_prob_dropout))
     print("Modality dropout prob: {}".format(args.image_text_dropout))
     print("Late Fusion strategy: {}".format(args.late_fusion))
+    print("Num neurons FC: {}".format(args.num_neurons_FC))
+    print("Prob Img Aug: {}".format(args.prob_aug))
 
     print("Training for {} epochs".format(args.epochs))
     if args.tl is True:
@@ -308,7 +312,9 @@ if __name__ == '__main__':
         modality_dropout_prob=args.image_text_dropout,
         img_dropout_prob=args.image_prob_dropout,
         late_fusion_strategy=args.late_fusion,
-        model_dropout_layer=args.model_dropout
+        model_dropout_layer=args.model_dropout,
+        prob_image_aug=args.prob_aug,
+        num_neurons_FC=args.num_neurons_FC
     )
 
     now = datetime.now()

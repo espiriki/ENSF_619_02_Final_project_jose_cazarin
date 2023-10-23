@@ -38,7 +38,8 @@ class EffV2MediumAndDistilbertGated(nn.Module):
                  n_classes,
                  drop_ratio,
                  image_text_dropout,
-                 img_prob_dropout):
+                 img_prob_dropout,
+                 num_neurons_fc):
         super(EffV2MediumAndDistilbertGated, self).__init__()
 
         self.text_model_name = "distilbert-base-uncased"
@@ -46,7 +47,7 @@ class EffV2MediumAndDistilbertGated(nn.Module):
         self.image_model = eff_net_v2()
 
         self.drop = nn.Dropout(p=drop_ratio)
-        self.fc_layer_neurons = 256
+        self.fc_layer_neurons = num_neurons_fc
 
         self.image_dropout = nn.Dropout2d(p=1.0)
         self.text_dropout = nn.Dropout1d(p=1.0)
