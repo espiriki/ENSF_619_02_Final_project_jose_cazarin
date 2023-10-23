@@ -5,12 +5,11 @@ from torchvision.models import *
 from transformers import DistilBertTokenizer
 from random import randint
 import random
-
+import numpy as np
 
 def decision(probability):
-    value = random.random()
-    return value < probability
-
+    return np.random.rand(1)[0] < probability
+    # smaller 0.2 -> True
 
 def eff_net_v2():
 
@@ -23,7 +22,6 @@ def eff_net_v2():
 
     return model
 
-
 def distilbert():
 
     model = DistilBertModel.from_pretrained("distilbert-base-uncased")
@@ -34,14 +32,14 @@ def distilbert():
     return model
 
 
-class EffV2MediumAndDistilbert(nn.Module):
+class EffV2MediumAndDistilbertGated(nn.Module):
 
     def __init__(self,
                  n_classes,
                  drop_ratio,
                  image_text_dropout,
                  img_prob_dropout):
-        super(EffV2MediumAndDistilbert, self).__init__()
+        super(EffV2MediumAndDistilbertGated, self).__init__()
 
         self.text_model_name = "distilbert-base-uncased"
         self.text_model = distilbert()
@@ -56,16 +54,9 @@ class EffV2MediumAndDistilbert(nn.Module):
         self.img_dropout_prob = img_prob_dropout
 
         # 1280 from image + 768 from text
-
-        # print("OUT OF IMAGE MODEL SHAPE")
-        # print(self.image_model.classifier[0].in_features)
-
         self.image_to_hidden_size = \
             nn.Linear(1280,
                       out_features=self.fc_layer_neurons)
-
-        # print("Hidden size of the distilbert: {}".format(
-        #     self.text_model.config.hidden_size))
 
         self.text_to_hidden_size = \
             nn.Linear(in_features=self.text_model.config.hidden_size,
@@ -99,66 +90,6 @@ class EffV2MediumAndDistilbert(nn.Module):
         self.fc_layer_gated = \
             nn.Linear(self.gated_output_hidden_size, n_classes)
 
-    def forward_normal(self,
-                       _input_ids,
-                       _attention_mask,
-                       _images,
-                       eval=False,
-                       remove_image=False,
-                       remove_text=False):
-
-        # print("forward pass shape images: ", _images.shape)
-        # print("forward pass shape text: ", _input_ids.shape)
-
-        # During evaluation we want to use the dropout
-        # to always remove only images or always remove
-        # only text
-        if eval:
-            self.image_dropout.train()
-            self.text_dropout.train()
-            if remove_image:
-                print("    zeroing images on EVAL")
-                _images = self.image_dropout(_images)
-            if remove_text:
-                print("    zeroing text on EVAL")
-                _input_ids = self.text_dropout(_input_ids)
-
-            if not remove_image and not remove_text:
-                print("using both on EVAL")
-
-        else:
-            if decision(self.prob_image_text_dropout):
-                image_or_text = decision(self.img_dropout_prob)
-                if image_or_text:
-                    print("    zeroing images")
-                    _images = self.image_dropout(_images)
-                else:
-                    print("    zeroing text")
-                    _input_ids = self.text_dropout(_input_ids)
-            else:
-                print("using both")
-
-        text_output = self.text_model(
-            input_ids=_input_ids,
-            attention_mask=_attention_mask
-        )
-        hidden_state = text_output[0]
-        text_features = hidden_state[:, 0]
-
-        image_features = self.image_model(_images)
-
-        image_hidden_size = self.image_to_hidden_size(image_features)
-        text_hidden_size = self.text_to_hidden_size(text_features)
-
-        image_plus_text_features = torch.cat(
-            (image_hidden_size, text_hidden_size), dim=1)
-
-        after_concat = self.concat_layer(image_plus_text_features)
-        after_drop = self.drop(after_concat)
-        final_output = self.fc_layer(after_drop)
-
-        return final_output
-
     def forward(self,
                 _input_ids,
                 _attention_mask,
@@ -167,48 +98,23 @@ class EffV2MediumAndDistilbert(nn.Module):
                 remove_image=False,
                 remove_text=False):
 
+        print("Gated forward pass")
         # print("forward pass shape images: ", _images.shape)
         # print("forward pass shape text: ", _input_ids.shape)
-
-        # During evaluation we want to use the dropout
-        # to always remove only images or always remove
-        # only text
-        if eval:
-            self.image_dropout.train()
-            self.text_dropout.train()
-            if remove_image:
-                print("    zeroing images on EVAL")
-                _images = self.image_dropout(_images)
-            if remove_text:
-                print("    zeroing text on EVAL")
-                _input_ids = self.text_dropout(_input_ids)
-
-            if not remove_image and not remove_text:
-                print("using both on EVAL")
-                pass
-
-        else:
-            if decision(self.prob_image_text_dropout):
-                # choose to drop image or text with equal
-                # probabilities
-                image_or_text = decision(0.5)
-                if image_or_text:
-                    print("    zeroing images\n")
-                    _images = self.image_dropout(_images)
-                else:
-                    print("    zeroing text\n")
-                    _input_ids = self.text_dropout(_input_ids)
-            else:
-                print("using both image and text\n")
+        self._images=_images
+        self._input_ids=_input_ids
+        self._attention_mask=_attention_mask
+        self.drop_modalities(eval, remove_image, remove_text)
 
         text_output = self.text_model(
-            input_ids=_input_ids,
-            attention_mask=_attention_mask
+            input_ids=self._input_ids,
+            attention_mask=self._attention_mask
         )
-        hidden_state = text_output[0]
-        text_features = hidden_state[:, 0]
-
-        image_features = self.image_model(_images)
+        
+        text_features = text_output[0][:, 0]
+        image_features = self.image_model(self._images)
+        print("text_features:",text_features.shape)
+        print("image_features:",image_features.shape)
 
         # 256 * bs
         image_feats_after_tanh =\
@@ -258,3 +164,81 @@ class EffV2MediumAndDistilbert(nn.Module):
 
     def get_max_token_size(self):
         return DistilBertConfig().max_position_embeddings
+
+    def drop_modalities(self, _eval, remove_image, remove_text):
+        # During evaluation we want to use the dropout
+        # to always remove only images or always remove
+        # only text
+        if _eval:
+            self.image_dropout.train()
+            self.text_dropout.train()
+            if remove_image:
+                print("    Eval: zero image")
+                self._images = self.image_dropout(self._images)
+            if remove_text:
+                print("    Eval: zero text")
+                self._input_ids = self.text_dropout(self._input_ids)
+                self._attention_mask = self.text_dropout(self._attention_mask)
+
+            if not remove_image and not remove_text:
+                print("    Eval: using both")
+                pass
+        # Training
+        else:
+            if decision(self.prob_image_text_dropout):
+                image_or_text = decision(self.img_dropout_prob)
+                if image_or_text:
+                    print("    Train: zeroing image\n")
+                    self._images = self.image_dropout(self._images)
+                else:
+                    print("    Train: zeroing text\n")
+                    self._input_ids = self.text_dropout(self._input_ids)
+                    self._attention_mask = self.text_dropout(self._attention_mask)
+            else:
+                print("    Train: using both\n")
+
+
+
+class EffV2MediumAndDistilbertClassic(EffV2MediumAndDistilbertGated):
+    
+    def forward(self,
+                _input_ids,
+                _attention_mask,
+                _images,
+                eval=False,
+                remove_image=False,
+                remove_text=False):
+
+        print("Classic forward")
+        # print("forward pass shape images: ", _images.shape)
+        # print("forward pass shape text: ", _input_ids.shape)
+
+        # During evaluation we want to use the dropout
+        # to always remove only images or always remove
+        # only text
+
+        self._images=_images
+        self._input_ids=_input_ids
+        self._attention_mask=_attention_mask
+        self.drop_modalities(eval, remove_image, remove_text)
+
+        text_output = self.text_model(
+            input_ids=self._input_ids,
+            attention_mask=self._attention_mask
+        )
+        hidden_state = text_output[0]
+        text_features = hidden_state[:, 0]
+
+        image_features = self.image_model(self._images)
+
+        image_hidden_size = self.image_to_hidden_size(image_features)
+        text_hidden_size = self.text_to_hidden_size(text_features)
+
+        image_plus_text_features = torch.cat(
+            (image_hidden_size, text_hidden_size), dim=1)
+
+        after_concat = self.concat_layer(image_plus_text_features)
+        after_drop = self.drop(after_concat)
+        final_output = self.fc_layer(after_drop)
+
+        return final_output

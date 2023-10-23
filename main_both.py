@@ -119,8 +119,7 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
             train_optimizer.step()
             train_optimizer.zero_grad()
 
-        print("Batches {}/{} on epoch {}".format(batch_idx,
-                                                 n_batches, epoch_num), end='\r')
+        print("Batch {} on epoch {}".format(batch_idx, epoch_num))
 
         cpu_loss = loss.cpu()
         cpu_loss = cpu_loss.detach()
@@ -177,8 +176,7 @@ def calculate_set_accuracy(
 
             correct += torch.sum(torch.eq(pred_labels, labels)).item()
 
-            print("Batches {}/{} ".format(batch_idx,
-                                          n_batches), end='\r')
+            print("Batches {}/{} ".format(batch_idx, n_batches))
 
             all_labels.append(labels.cpu())
             all_predictions.append(pred_labels.cpu())
@@ -252,15 +250,26 @@ if __name__ == '__main__':
     print("Text Model: {}".format(args.text_model))
     print("Image Model: {}".format(args.image_model))
 
-    global_model = EffV2MediumAndDistilbert(
-        _num_classes,
-        args.model_dropout,
-        args.image_text_dropout,
-        args.image_prob_dropout)
+    global_model = None
 
-    _batch_size = 64
-    _batch_size_FT = 20
-    args.acc_steps = 4
+    if args.late_fusion == "gated":
+        global_model = EffV2MediumAndDistilbertGated(
+            _num_classes,
+            args.model_dropout,
+            args.image_text_dropout,
+            args.image_prob_dropout)
+    elif args.late_fusion == "classic":
+        global_model = EffV2MediumAndDistilbertClassic(
+            _num_classes,
+            args.model_dropout,
+            args.image_text_dropout,
+            args.image_prob_dropout)
+    else:
+        print("Wrong late fusion strategy: ", args.late_fusion)
+        sys.exit(1)
+
+    _batch_size = 16
+    _batch_size_FT = 16
 
     print("Num total parameters of the model: {}".format(
         count_parameters(global_model)))
@@ -271,8 +280,10 @@ if __name__ == '__main__':
     print("Using class weights: {}".format(args.balance_weights))
     print("Optimizer: {}".format(args.opt))
     print("Grad Acc steps: {}".format(args.acc_steps))
+    print("Grad Acc steps for Fine Tuning: {}".format(args.acc_steps_FT))
     print("Img dropout prob: {}".format(args.image_prob_dropout))
     print("Modality dropout prob: {}".format(args.image_text_dropout))
+    print("Late Fusion strategy: {}".format(args.late_fusion))
 
     print("Training for {} epochs".format(args.epochs))
     if args.tl is True:
@@ -287,26 +298,32 @@ if __name__ == '__main__':
         balance_weights=args.balance_weights,
         optimizer=args.opt,
         batch_acc_steps=args.acc_steps,
+        batch_acc_steps_FT=args.acc_steps_FT,
         num_epochs=args.epochs,
         fine_tuning_epochs=args.ft_epochs,
         fraction_lr=args.fraction_lr,
-        architecture_image=args.text_model,
+        architecture_image=args.image_model,
         architecture_text=args.text_model,
         dataset_id="garbage",
         modality_dropout_prob=args.image_text_dropout,
         img_dropout_prob=args.image_prob_dropout,
+        late_fusion_strategy=args.late_fusion,
+        model_dropout_layer=args.model_dropout
     )
 
     now = datetime.now()
     date_time = now.strftime("%m/%d/%Y, %H:%M:%S")
+    print("Starting W&B...")
     run = wandb.init(
         project="Garbage Classification Both",
         config=config,
         name="Both models: " +
         str(args.text_model) +
         str(args.image_model) +
-        " " + str(date_time)
+        " " + str(date_time) +
+        " " + str(args.late_fusion)
     )
+    print("Done!")
 
     wandb.watch(global_model)
 
@@ -379,17 +396,21 @@ if __name__ == '__main__':
     _max_len = global_model.get_max_token_size()
 
     aux = [args.dataset_folder_name, TRAIN_DATASET_PATH]
-    dataset_folder = '_'.join(aux)
+    train_dataset_folder = '_'.join(aux)
+    train_dataset_folder = os.path.join(BASE_PATH, REMOVE, train_dataset_folder)
+    print("Train dataset folder:", train_dataset_folder)
     train_data = CustomImageTextFolder(
-        root=os.path.join(BASE_PATH, REMOVE, dataset_folder),
+        root=train_dataset_folder,
         tokens_max_len=_max_len,
         tokenizer_text=_tokenizer,
         transform=Transforms(img_transf=TRAIN_PIPELINE))
 
     aux = [args.dataset_folder_name, VAL_DATASET_PATH]
-    dataset_folder = '_'.join(aux)
+    val_dataset_folder = '_'.join(aux)
+    val_dataset_folder = os.path.join(BASE_PATH, REMOVE, val_dataset_folder)
+    print("Val dataset folder:", val_dataset_folder)
     val_data = CustomImageTextFolder(
-        root=os.path.join(BASE_PATH, REMOVE, dataset_folder),
+        root=val_dataset_folder,
         tokens_max_len=_max_len,
         tokenizer_text=_tokenizer,
         transform=Transforms(img_transf=VALIDATION_PIPELINE))
@@ -444,12 +465,10 @@ if __name__ == '__main__':
     global_model.to(device)
     max_val_accuracy = 0.0
     best_epoch = 0
-    args.acc_steps = 0
 
     for epoch in range(args.epochs):
 
-        global_model.text_model.train()
-        global_model.image_model.train()
+        global_model.train()
         st = time.time()
 
         num_batches, train_loss_per_batch = run_one_epoch(epoch,
@@ -475,8 +494,7 @@ if __name__ == '__main__':
         print("Min train loss on epoch {}: {:.3f}".format(
             epoch, np.min(train_loss_per_batch)))
 
-        global_model.text_model.eval()
-        global_model.image_model.eval()
+        global_model.eval()
 
         print("Starting train accuracy calculation for epoch {}".format(epoch))
         eval_mode = False
@@ -562,7 +580,6 @@ if __name__ == '__main__':
                    'green_val_precision': val_report["green"]["precision"],
                    'ttr_val_precision': val_report["ttr"]["precision"]})
 
-    args.acc_steps = 4
     print("Starting Fine tuning!!")
     # Fine tuning loop
     if args.tl is True:
@@ -580,8 +597,7 @@ if __name__ == '__main__':
 
         for epoch in range(args.ft_epochs):
 
-            global_model.text_model.train()
-            global_model.image_model.train()
+            global_model.train()
             st = time.time()
             # train using a small learning rate
             ft_num_batches, ft_train_loss_per_batch = run_one_epoch(epoch,
@@ -589,11 +605,11 @@ if __name__ == '__main__':
                                                                     data_loader_train_FT,
                                                                     len(train_data),
                                                                     device,
-                                                                    _batch_size,
+                                                                    _batch_size_FT,
                                                                     optimizer,
                                                                     class_weights,
                                                                     args.balance_weights,
-                                                                    args.acc_steps)
+                                                                    args.acc_steps_FT)
             elapsed_time = time.time() - st
             print('Fine Tuning: epoch time: {:.1f}'.format(elapsed_time))
 
@@ -608,8 +624,7 @@ if __name__ == '__main__':
 
             train_loss_history.append(ft_train_loss_avg)
 
-            global_model.text_model.eval()
-            global_model.image_model.eval()
+            global_model.eval()
             print(
                 "Fine Tuning: starting train accuracy calculation for epoch {}".format(epoch))
 
@@ -676,14 +691,25 @@ if __name__ == '__main__':
                                                           _batch_size_FT,
                                                           mode_config_dict['text_only'],
                                                           eval_mode)
+            
+            print("Fine Tuning: Calculating val set accuracy with BOTH on epoch {}".format(epoch))
+            val_acc_both, _ = calculate_set_accuracy(global_model,
+                                                      data_loader_val_FT,
+                                                      len(val_data),
+                                                      device,
+                                                      _batch_size_FT,
+                                                      mode_config_dict['both'],
+                                                      eval_mode)              
 
+            
             wandb.log({'epoch': epoch,
                        'epoch_time_seconds': elapsed_time,
-                       'train_loss_avg': train_loss_avg,
+                       'train_loss_avg': ft_train_loss_avg,
                        'train_accuracy_history': train_accuracy,
                        'val_accuracy_history': val_accuracy,
                        'val_accuracy_text_only_history': val_acc_text_only,
                        'val_accuracy_image_only_history': val_acc_image_only,
+                       'val_accuracy_BOTH_history': val_acc_both,
                        'max_val_acc': max_val_accuracy,
                        'black_val_precision': val_report["black"]["precision"],
                        'blue_val_precision': val_report["blue"]["precision"],

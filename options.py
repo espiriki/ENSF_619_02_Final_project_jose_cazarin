@@ -38,6 +38,9 @@ def args_parser():
 
     parser.add_argument('--acc_steps', type=int, default=0,
                         help='Gradient accumulation steps')
+    
+    parser.add_argument('--acc_steps_FT', type=int, default=0,
+                        help='Gradient accumulation steps')    
 
     parser.add_argument('--opt', type=str, default="sgd",
                         help='Optimizer to use')
@@ -47,6 +50,9 @@ def args_parser():
     
     parser.add_argument('--prob_aug', type=float, default=0.6,
                         help='Probability of applying augmentations')
+
+    parser.add_argument('--late_fusion', type=str, default="gated",
+                        help='Which late fusion strategy to use')
 
     args = parser.parse_args()
     return args
