@@ -25,6 +25,7 @@ import pandas as pd
 import seaborn as sn
 from matplotlib.colors import LinearSegmentedColormap
 from sklearn.metrics import classification_report
+from CVPR_code.CustomImageTextFolder import *
 
 _num_classes = 4
 
@@ -70,8 +71,11 @@ def calculate_test_accuracy(
     confmat = ConfusionMatrix(task="multiclass", num_classes=4)
     with torch.no_grad():
 
-        for batch_idx, (images, labels) in enumerate(data_loader):
+        for batch_idx, (data, labels) in enumerate(data_loader):
 
+            images = data['image']['raw_image']
+            texts = data['text']
+            print(texts)
             images, labels = images.to(hw_device), labels.to(hw_device)
 
             # Inference
@@ -228,7 +232,7 @@ if __name__ == '__main__':
         a_pytorch.transforms.ToTensorV2()
     ])
 
-    test_data = torchvision.datasets.ImageFolder(root=args.dataset_folder_name,
+    test_data = CustomImageTextFolder(root=args.dataset_folder_name,
                                                  transform=Transforms(img_transf=TEST_PIPELINE))
 
     print("Num of test images: {}".format(len(test_data)))
