@@ -171,6 +171,8 @@ class EffV2MediumAndDistilbertGated(nn.Module):
         # to always remove only images or always remove
         # only text
         if _eval:
+            # when evaluating, dropout is removed
+            # so set it here again
             self.image_dropout.train()
             self.text_dropout.train()
             if remove_image:

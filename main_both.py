@@ -239,8 +239,9 @@ if __name__ == '__main__':
     if args.tl is True:
         print("In Transfer Learning mode!!!")
 
-    # This is to make results predictable, when splitting the dataset into train/val/test
+    # This is to make results predictable between runs
     torch.manual_seed(42)
+    np.random.seed(42)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
