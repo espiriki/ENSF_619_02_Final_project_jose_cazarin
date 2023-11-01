@@ -213,6 +213,7 @@ if __name__ == '__main__':
                                                             device,
                                                             _batch_size,
                                                             # will use percentages to randomly remove one input
+                                                            # Just to emulate the train scenario
                                                             mode_config_dict['both'],
                                                             False)
     
