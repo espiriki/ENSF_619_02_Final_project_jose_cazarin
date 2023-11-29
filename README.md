@@ -5,6 +5,10 @@ First, download the dataset [here](ADD_LINK). Unzip the folders **CVPR_2024_data
 
 Then, to repro the results in the test set, download the saved model weights [here](ADD_LINK) and extract the *.pth files into the folder **saved_model_weights** of this repo.
 
+## Set up environment
+
+Use the following docker image to run the commands: `jcazarin/cazarin_pytorch_cvpr`. It is publicly available on DockerHub.
+
 ### Training Results
 
 To repro the training process of the **EfficientNet B0**, use the following command:
