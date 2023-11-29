@@ -212,42 +212,8 @@ if __name__ == '__main__':
                                                             len(test_data),
                                                             device,
                                                             _batch_size,
-                                                            # will use percentages to randomly remove one input
-                                                            # Just to emulate the train scenario
-                                                            mode_config_dict['both'],
-                                                            False)
-    
-    generate_report_and_image(test_report_dict,test_accuracy, conf_matrix, "random_both")
-
-    test_accuracy, test_report, test_report_dict, conf_matrix = calculate_test_accuracy(global_model,
-                                                            data_loader_test,
-                                                            len(test_data),
-                                                            device,
-                                                            _batch_size,
                                                             # will always use both inputs
                                                             mode_config_dict['both'],
                                                             True)
     
     generate_report_and_image(test_report_dict,test_accuracy, conf_matrix, "always_both")
-    
-    test_accuracy, test_report, test_report_dict, conf_matrix = calculate_test_accuracy(global_model,
-                                                            data_loader_test,
-                                                            len(test_data),
-                                                            device,
-                                                            _batch_size,
-                                                            # will use only images
-                                                            mode_config_dict['image_only'],
-                                                            True)
-    
-    generate_report_and_image(test_report_dict,test_accuracy, conf_matrix, "image_only")
-    
-    test_accuracy, test_report, test_report_dict, conf_matrix = calculate_test_accuracy(global_model,
-                                                            data_loader_test,
-                                                            len(test_data),
-                                                            device,
-                                                            _batch_size,
-                                                            # will use only text
-                                                            mode_config_dict['text_only'],
-                                                            True)
-    
-    generate_report_and_image(test_report_dict,test_accuracy, conf_matrix, "text_only")        

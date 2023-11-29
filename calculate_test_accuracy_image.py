@@ -75,7 +75,6 @@ def calculate_test_accuracy(
 
             images = data['image']['raw_image']
             texts = data['text']
-            print(texts)
             images, labels = images.to(hw_device), labels.to(hw_device)
 
             # Inference
