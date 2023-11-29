@@ -33,7 +33,7 @@ from datetime import datetime
 
 _num_classes = 4
 
-BASE_PATH = "/project/def-rmsouza/jocazar/"
+BASE_PATH = "./"
 TRAIN_DATASET_PATH = "Train"
 VAL_DATASET_PATH = "Val"
 
@@ -338,8 +338,6 @@ if __name__ == '__main__':
         print("Using {} GPUs".format(torch.cuda.device_count()))
         global_model = nn.DataParallel(global_model)
 
-    REMOVE = "dataset_with_text"
-
     # EffNetV2 Medium image size
     size = global_model.get_image_size()
     WIDTH = size[0]
@@ -394,7 +392,7 @@ if __name__ == '__main__':
     aux = [args.dataset_folder_name, TRAIN_DATASET_PATH]
     dataset_folder = '_'.join(aux)
     train_dataset_path = \
-        os.path.join(BASE_PATH, REMOVE, dataset_folder)
+        os.path.join(BASE_PATH, dataset_folder)
 
     class_weights = get_class_weights(train_dataset_path)
     print("Class weights: {}".format(class_weights))
@@ -404,7 +402,7 @@ if __name__ == '__main__':
 
     aux = [args.dataset_folder_name, TRAIN_DATASET_PATH]
     train_dataset_folder = '_'.join(aux)
-    train_dataset_folder = os.path.join(BASE_PATH, REMOVE, train_dataset_folder)
+    train_dataset_folder = os.path.join(BASE_PATH, train_dataset_folder)
     print("Train dataset folder:", train_dataset_folder)
     train_data = CustomImageTextFolder(
         root=train_dataset_folder,
