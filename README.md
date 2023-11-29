@@ -7,7 +7,7 @@ Then, to repro the results in the test set, download the saved model weights [he
 
 ## Set up environment
 
-Use the following docker image to run the commands: `jcazarin/cazarin_pytorch_cvpr`. It is publicly available on DockerHub.
+Use the following docker image to run the commands: `jcazarin/cazarin_pytorch_cvpr:2024`. It is publicly available on DockerHub.
 
 ### Training Results
 
