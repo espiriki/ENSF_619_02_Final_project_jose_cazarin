@@ -5,6 +5,7 @@ from torchvision.models import *
 from transformers import DistilBertTokenizer
 from random import randint
 import random
+from torch.nn import functional as F
 import numpy as np
 
 def decision(probability):
@@ -245,3 +246,50 @@ class EffV2MediumAndDistilbertClassic(EffV2MediumAndDistilbertGated):
         final_output = self.fc_layer(after_drop)
 
         return final_output
+    
+    
+class EffV2MediumAndDistilbertNormalized(EffV2MediumAndDistilbertGated):
+    
+    def forward(self,
+                _input_ids,
+                _attention_mask,
+                _images,
+                eval=False,
+                remove_image=False,
+                remove_text=False):
+
+        print("Normalized forward")
+        # print("forward pass shape images: ", _images.shape)
+        # print("forward pass shape text: ", _input_ids.shape)
+
+        # During evaluation we want to use the dropout
+        # to always remove only images or always remove
+        # only text
+
+        self._images=_images
+        self._input_ids=_input_ids
+        self._attention_mask=_attention_mask
+        self.drop_modalities(eval, remove_image, remove_text)
+
+        text_output = self.text_model(
+            input_ids=self._input_ids,
+            attention_mask=self._attention_mask
+        )
+        hidden_state = text_output[0]
+        
+        text_features = hidden_state[:, 0]
+        image_features = self.image_model(self._images)
+
+        image_hidden_size = self.image_to_hidden_size(image_features)
+        text_hidden_size = self.text_to_hidden_size(text_features)
+
+        image_plus_text_features = torch.cat(
+            (image_hidden_size, text_hidden_size), dim=1)
+
+        image_plus_text_features = F.normalize(image_plus_text_features)
+
+        after_concat = self.concat_layer(image_plus_text_features)
+        after_drop = self.drop(after_concat)
+        final_output = self.fc_layer(after_drop)
+
+        return final_output    

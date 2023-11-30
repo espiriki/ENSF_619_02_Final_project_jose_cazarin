@@ -27,7 +27,6 @@ from CVPR_code.text_models import *
 from CVPR_code.multimodal_model import *
 from torchmetrics.classification import ConfusionMatrix
 import ssl
-from sklearn.model_selection import train_test_split as tts
 from sklearn.metrics import classification_report
 from datetime import datetime
 
@@ -267,6 +266,13 @@ if __name__ == '__main__':
             args.image_text_dropout,
             args.image_prob_dropout,
             args.num_neurons_FC)
+    elif args.late_fusion == "normalized":
+        global_model = EffV2MediumAndDistilbertNormalized(
+            _num_classes,
+            args.model_dropout,
+            args.image_text_dropout,
+            args.image_prob_dropout,
+            args.num_neurons_FC)        
     else:
         print("Wrong late fusion strategy: ", args.late_fusion)
         sys.exit(1)
@@ -412,7 +418,7 @@ if __name__ == '__main__':
 
     aux = [args.dataset_folder_name, VAL_DATASET_PATH]
     val_dataset_folder = '_'.join(aux)
-    val_dataset_folder = os.path.join(BASE_PATH, REMOVE, val_dataset_folder)
+    val_dataset_folder = os.path.join(BASE_PATH, val_dataset_folder)
     print("Val dataset folder:", val_dataset_folder)
     val_data = CustomImageTextFolder(
         root=val_dataset_folder,
