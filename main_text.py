@@ -29,10 +29,11 @@ import ssl
 from sklearn.model_selection import train_test_split as tts
 from sklearn.metrics import classification_report
 from datetime import datetime
+import os
 
 _num_classes = 4
 
-BASE_PATH = "./"
+BASE_PATH = os.path.dirname(os.path.realpath(__file__))
 TRAIN_DATASET_PATH = "Train"
 VAL_DATASET_PATH = "Val"
 

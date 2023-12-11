@@ -27,7 +27,7 @@ from torchmetrics.classification import ConfusionMatrix
 import ssl
 from sklearn.metrics import classification_report
 from datetime import datetime
-
+import os
 _num_classes = 4
 
 
@@ -53,7 +53,7 @@ eff_net_sizes = {
     'eff_v2_large': (480, 480)
 }
 
-BASE_PATH = "./"
+BASE_PATH = os.path.dirname(os.path.realpath(__file__))
 TRAIN_DATASET_PATH = "Train"
 VAL_DATASET_PATH = "Val"
 
