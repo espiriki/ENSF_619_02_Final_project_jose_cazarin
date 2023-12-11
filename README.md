@@ -3,7 +3,7 @@
 ## Instructions on how to repo the results in the paper
 First, download the dataset [here](https://zenodo.org/uploads/10215592). Unzip the folders **CVPR_2024_dataset_Train**, **CVPR_2024_dataset_Val**, **CVPR_2024_dataset_Test** it into the root folder of this repo.
 
-Then, to repro the results in the test set, download the saved model weights [here](ADD_LINK) and extract the *.pth files into the folder **saved_model_weights** of this repo.
+Then, to repro the results in the test set, download the saved model weights from the previous link and extract the *.pth files into the folder **saved_model_weights** of this repo.
 
 ## Set up environment
 
