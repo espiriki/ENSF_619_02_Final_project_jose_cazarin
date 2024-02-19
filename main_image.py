@@ -53,7 +53,7 @@ eff_net_sizes = {
     'eff_v2_large': (480, 480)
 }
 
-BASE_PATH = os.path.dirname(os.path.realpath(__file__))
+BASE_PATH = os.path.dirname(os.path.realpath(__file__)) + os.sep
 TRAIN_DATASET_PATH = "Train"
 VAL_DATASET_PATH = "Val"
 
@@ -520,6 +520,8 @@ if __name__ == '__main__':
         sys.exit(1)
 
     print("Starting training...")
+    print("Len of train set:", len(data_loader_train.dataset))
+    print("Len of val set:", len(data_loader_val.dataset))
     global_model.to(device)
     max_val_accuracy = 0.0
     best_epoch = 0
@@ -684,56 +686,5 @@ if __name__ == '__main__':
             else:
                 print("Fine Tuning: not saving model, best Val Acc so far on epoch {}: {:.3f}".format(best_epoch,
                                                                                                       max_val_accuracy))
-
-    # Finished training, save data
-    with open(BASE_PATH + 'save/train_loss_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
-            args.image_model, args.lr, args.reg, args.balance_weights), 'w') as f:
-
-        write = csv.writer(f)
-        write.writerow(map(lambda x: x, train_loss_history))
-
-    with open(BASE_PATH + 'save/train_acc_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
-            args.image_model, args.lr, args.reg, args.balance_weights), 'w') as f:
-
-        write = csv.writer(f)
-        write.writerow(map(lambda x: x, train_accuracy_history))
-
-    with open(BASE_PATH + 'save/val_acc_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
-            args.image_model, args.lr, args.reg, args.balance_weights), 'w') as f:
-
-        write = csv.writer(f)
-        write.writerow(map(lambda x: x, val_accuracy_history))
-
-    # Plot train loss
-    train_loss_history = torch.FloatTensor(train_loss_history).cpu()
-    plt.figure()
-    plt.plot(range(len(train_loss_history)), train_loss_history)
-    plt.xlabel('Epochs')
-    plt.ylabel('Train loss')
-    plt.title('Model: {}'.format(args.image_model))
-    plt.savefig(
-        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_train_loss.png'.format(
-            args.image_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
-
-    # Plot train accuracy
-    train_accuracy_history = torch.FloatTensor(train_accuracy_history).cpu()
-    plt.figure()
-    plt.plot(range(len(train_accuracy_history)), train_accuracy_history)
-    plt.xlabel('Epochs')
-    plt.ylabel('Train accuracy')
-    plt.title('Model: {}'.format(args.image_model))
-    plt.savefig(
-        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_train_accuracy.png'.format(
-            args.image_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
-
-    # Plot val accuracy
-    plt.figure()
-    plt.plot(range(len(val_accuracy_history)), val_accuracy_history)
-    plt.xlabel('Epochs')
-    plt.ylabel('Val accuracy per Epoch')
-    plt.title('Model: {}'.format(args.image_model))
-    plt.savefig(
-        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_val_accuracy.png'.format(
-            args.image_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
 
     run.finish()

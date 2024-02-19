@@ -33,7 +33,7 @@ import os
 
 _num_classes = 4
 
-BASE_PATH = os.path.dirname(os.path.realpath(__file__))
+BASE_PATH = os.path.dirname(os.path.realpath(__file__)) + os.sep
 TRAIN_DATASET_PATH = "Train"
 VAL_DATASET_PATH = "Val"
 
@@ -190,13 +190,13 @@ def calculate_set_accuracy(
 def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tuning, class_weights, opt):
 
     if fine_tuning:
-        base_name = BASE_PATH+"model_weights/BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_FractionLR_{}_OPT_{}_VAL_ACC_{:.3f}_".format(
-            model_name, epoch_num+1, args.lr, args.reg, args.fraction_lr, opt, val_acc)
+        base_name = os.path.join(BASE_PATH, "model_weights/BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_FractionLR_{}_OPT_{}_VAL_ACC_{:.3f}_".format(
+            model_name, epoch_num+1, args.lr, args.reg, args.fraction_lr, opt, val_acc))
 
     else:
 
-        base_name = BASE_PATH+"model_weights/BEST_model_{}_epoch_{}_LR_{}_Reg_{}_VAL_ACC_{:.3f}_".format(
-            model_name, epoch_num+1, args.lr, args.reg, val_acc)
+        base_name = os.path.join(BASE_PATH, "model_weights/BEST_model_{}_epoch_{}_LR_{}_Reg_{}_VAL_ACC_{:.3f}_".format(
+            model_name, epoch_num+1, args.lr, args.reg, val_acc))
 
     base_name = base_name + "class_weights_{}".format(class_weights)
     base_name = base_name + ".pth"
@@ -310,8 +310,7 @@ if __name__ == '__main__':
     run = wandb.init(
         project="Garbage Classification Text",
         config=config,
-        name="Text model: " + str(args.text_model) + " " + str(date_time)
-    )
+        name="Text model: " + str(args.text_model) + " " + str(date_time))
 
     wandb.watch(global_model)
 
@@ -393,6 +392,8 @@ if __name__ == '__main__':
         sys.exit(1)
 
     print("Starting training...")
+    print("Len of train set:", len(data_loader_train.dataset))
+    print("Len of val set:", len(data_loader_val.dataset))
     global_model.to(device)
     max_val_accuracy = 0.0
     best_epoch = 0
@@ -556,56 +557,5 @@ if __name__ == '__main__':
                        'blue_val_precision': val_report["blue"]["precision"],
                        'green_val_precision': val_report["green"]["precision"],
                        'ttr_val_precision': val_report["ttr"]["precision"]})
-
-    # Finished training, save data
-    with open(BASE_PATH + 'save/train_loss_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
-            args.text_model, args.lr, args.reg, args.balance_weights), 'w') as f:
-
-        write = csv.writer(f)
-        write.writerow(map(lambda x: x, train_loss_history))
-
-    with open(BASE_PATH + 'save/train_acc_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
-            args.text_model, args.lr, args.reg, args.balance_weights), 'w') as f:
-
-        write = csv.writer(f)
-        write.writerow(map(lambda x: x, train_accuracy_history))
-
-    with open(BASE_PATH + 'save/val_acc_model_{}_LR_{}_REG_{}_class_weights_{}.csv'.format(
-            args.text_model, args.lr, args.reg, args.balance_weights), 'w') as f:
-
-        write = csv.writer(f)
-        write.writerow(map(lambda x: x, val_accuracy_history))
-
-    # Plot train loss
-    train_loss_history = torch.FloatTensor(train_loss_history).cpu()
-    plt.figure()
-    plt.plot(range(len(train_loss_history)), train_loss_history)
-    plt.xlabel('Epochs')
-    plt.ylabel('Train loss')
-    plt.title('Model: {}'.format(args.text_model))
-    plt.savefig(
-        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_train_loss.png'.format(
-            args.text_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
-
-    # Plot train accuracy
-    train_accuracy_history = torch.FloatTensor(train_accuracy_history).cpu()
-    plt.figure()
-    plt.plot(range(len(train_accuracy_history)), train_accuracy_history)
-    plt.xlabel('Epochs')
-    plt.ylabel('Train accuracy')
-    plt.title('Model: {}'.format(args.text_model))
-    plt.savefig(
-        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_train_accuracy.png'.format(
-            args.text_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
-
-    # Plot val accuracy
-    plt.figure()
-    plt.plot(range(len(val_accuracy_history)), val_accuracy_history)
-    plt.xlabel('Epochs')
-    plt.ylabel('Val accuracy per Epoch')
-    plt.title('Model: {}'.format(args.text_model))
-    plt.savefig(
-        BASE_PATH + 'save/[M]_{}_[E]_{}_[LR]_{}_[REG]_{}_[OPT]_{}_class_weights_{}_val_accuracy.png'.format(
-            args.text_model, args.epochs, args.lr, args.reg, args.opt, args.balance_weights))
 
     run.finish()
