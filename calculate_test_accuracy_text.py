@@ -113,8 +113,9 @@ def calculate_test_accuracy(
     plt.rcParams.update({'font.size': 16})
     plt.figure(figsize=(10, 5))
     sn.heatmap(df_cm, annot=True, cmap='viridis', fmt='g')
+    Path(os.path.join(BASE_PATH,args.text_model)).mkdir(parents=True, exist_ok=True)
     plt.savefig(
-        os.path.join(BASE_PATH,
+        os.path.join(BASE_PATH,args.text_model,
                      'conf_matrix_text_model_{}_class_weights_{}_test_set_acc_{:.2f}.png'.format(
                          args.text_model, args.balance_weights, test_acc)))
 
@@ -127,7 +128,7 @@ def calculate_test_accuracy(
                                         target_names=classes, output_dict=True)
 
     dataframe = pd.DataFrame.from_dict(report_dict)
-    dataframe.to_csv(os.path.join(BASE_PATH,
+    dataframe.to_csv(os.path.join(BASE_PATH,args.text_model,
                                   "text_model_{}_report_test_set_acc_{:.2f}.csv".format(args.text_model, test_acc)),
                      index=True)
 
