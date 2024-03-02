@@ -148,6 +148,8 @@ if __name__ == '__main__':
     else:
         print("GPU OK!!!")
 
+    torch.manual_seed(42)
+
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # This is to make results predictable between runs

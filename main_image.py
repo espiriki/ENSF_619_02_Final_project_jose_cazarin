@@ -253,7 +253,6 @@ if __name__ == '__main__':
         print("Please provide dataset path")
         sys.exit(1)
 
-    # This is to make results predictable, when splitting the dataset into train/val/test
     torch.manual_seed(42)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
