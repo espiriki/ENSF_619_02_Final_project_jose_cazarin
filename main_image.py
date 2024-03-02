@@ -26,8 +26,12 @@ from CVPR_code.CustomImageTextFolder import *
 from torchmetrics.classification import ConfusionMatrix
 import ssl
 from sklearn.metrics import classification_report
-from datetime import datetime
+from datetime    import datetime
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import os
+import pytz
+from pathlib import Path
+
 _num_classes = 4
 
 
@@ -180,25 +184,25 @@ def calculate_set_accuracy(
 
 def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tuning, class_weights, opt):
 
+    base = os.path.join("model_weights", model_name)
+    Path(os.path.join(BASE_PATH,base)).mkdir(parents=True, exist_ok=True)    
+
     if fine_tuning:
-        base_name = "model_weights/BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_Opt_{}_FractionLR_{}_VAL_ACC_{:.3f}_".format(
+        filename = "BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_Opt_{}_FractionLR_{}_VAL_ACC_{:.3f}_".format(
             model_name, epoch_num+1, args.lr, args.reg, opt, args.fraction_lr, val_acc)
 
     else:
 
-        base_name = "model_weights/BEST_model_{}_epoch_{}_LR_{}_Reg_{}_Opt_{}_VAL_ACC_{:.3f}_".format(
+        filename = "BEST_model_{}_epoch_{}_LR_{}_Reg_{}_Opt_{}_VAL_ACC_{:.3f}_".format(
             model_name, epoch_num+1, args.lr, args.reg, opt, val_acc)
 
-    base_name = base_name + "class_weights_{}".format(class_weights)
-    base_name = base_name + ".pth"
+    full_path = os.path.join(BASE_PATH,base,filename)
+    full_path = full_path + ".pth"
 
-    weights_path = BASE_PATH + base_name
+    print("Saving weights to {}".format(full_path))
 
     model.to("cpu")
-
-    print("Saving weights to {}".format(weights_path))
-
-    torch.save(model.state_dict(), weights_path)
+    torch.save(model.state_dict(), full_path)
 
     model.to(hw_device)
 
@@ -244,6 +248,10 @@ if __name__ == '__main__':
 
     if args.tl is True:
         print("In Transfer Learning mode!!!")
+
+    if args.dataset_folder_name == "":
+        print("Please provide dataset path")
+        sys.exit(1)
 
     # This is to make results predictable, when splitting the dataset into train/val/test
     torch.manual_seed(42)
@@ -375,10 +383,11 @@ if __name__ == '__main__':
         prob_augmentations=args.prob_aug,
     )
 
-    now = datetime.now()
+    timezone = pytz.timezone('America/Edmonton')
+    now = datetime.now(timezone)
     date_time = now.strftime("%m/%d/%Y, %H:%M:%S")
     run = wandb.init(
-        project="Garbage Classification Image",
+        project="Garbage Classification Image - Dataset v2",
         config=config,
         name="Image model: " + str(args.image_model) + " " + str(date_time)
     )
@@ -525,6 +534,7 @@ if __name__ == '__main__':
     global_model.to(device)
     max_val_accuracy = 0.0
     best_epoch = 0
+    scheduler = ReduceLROnPlateau(optimizer, 'max',factor=0.4,verbose=True)
 
     for epoch in range(args.epochs):
 
@@ -664,18 +674,8 @@ if __name__ == '__main__':
             print("Fine Tuning: Val set accuracy on epoch {}: {:.3f}".format(
                 epoch, val_accuracy))
 
+            scheduler.step(val_accuracy)
             val_accuracy_history.append(val_accuracy)
-
-            wandb.log({'epoch': epoch,
-                       'epoch_time_seconds': elapsed_time,
-                       'train_loss_avg': train_loss_avg,
-                       'train_accuracy_history': train_accuracy,
-                       'val_accuracy_history': val_accuracy,
-                       'max_val_acc': max_val_accuracy,
-                       'black_val_precision': val_report["black"]["precision"],
-                       'blue_val_precision': val_report["blue"]["precision"],
-                       'green_val_precision': val_report["green"]["precision"],
-                       'ttr_val_precision': val_report["ttr"]["precision"]})
 
             if val_accuracy > max_val_accuracy:
                 print("Fine Tuning: best model obtained based on Val Acc. Saving it!")
@@ -686,5 +686,16 @@ if __name__ == '__main__':
             else:
                 print("Fine Tuning: not saving model, best Val Acc so far on epoch {}: {:.3f}".format(best_epoch,
                                                                                                       max_val_accuracy))
+                
+            wandb.log({'epoch': epoch,
+                       'epoch_time_seconds': elapsed_time,
+                       'train_loss_avg': train_loss_avg,
+                       'train_accuracy_history': train_accuracy,
+                       'val_accuracy_history': val_accuracy,
+                       'max_val_acc': max_val_accuracy,
+                       'black_val_precision': val_report["black"]["precision"],
+                       'blue_val_precision': val_report["blue"]["precision"],
+                       'green_val_precision': val_report["green"]["precision"],
+                       'ttr_val_precision': val_report["ttr"]["precision"]})                
 
     run.finish()

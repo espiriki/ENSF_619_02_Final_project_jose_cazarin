@@ -54,7 +54,6 @@ eff_net_sizes = {
 
 BASE_PATH = "./test_set_reports"
 
-
 def calculate_test_accuracy(
         model,
         data_loader,
@@ -69,12 +68,13 @@ def calculate_test_accuracy(
     all_preds = []
     all_labels = []
     confmat = ConfusionMatrix(task="multiclass", num_classes=4)
+    
+    global_model.eval()    
     with torch.no_grad():
 
         for batch_idx, (data, labels) in enumerate(data_loader):
 
             images = data['image']['raw_image']
-            texts = data['text']
             images, labels = images.to(hw_device), labels.to(hw_device)
 
             # Inference
@@ -113,8 +113,8 @@ def calculate_test_accuracy(
     sn.heatmap(df_cm, annot=True, cmap='viridis', fmt='g')
     plt.savefig(
         os.path.join(BASE_PATH,
-                     'conf_matrix_image_model_{}_class_weights_{}_test_set_acc_{:.2f}.png'.format(
-                         args.image_model, args.balance_weights, test_acc)))
+                     'conf_matrix_image_model_{}_test_set_acc_{:.2f}.png'.format(
+                         args.image_model, test_acc)))
 
     report = classification_report(torch.tensor(all_labels).cpu(),
                                    torch.tensor(all_preds).cpu(),
@@ -209,8 +209,6 @@ if __name__ == '__main__':
 
     global_model.load_state_dict(torch.load(model_name))
 
-    global_model.eval()
-
     WIDTH = input_size[0]
     HEIGHT = input_size[1]
     AR_INPUT = WIDTH / HEIGHT
@@ -226,7 +224,7 @@ if __name__ == '__main__':
         keep_aspect_ratio.PadToMaintainAR(aspect_ratio=AR_INPUT),
         A.Resize(width=WIDTH,
                  height=HEIGHT,
-                 interpolation=cv2.INTER_CUBIC),
+                 interpolation=cv2.INTER_LINEAR),
         normalize_transform,
         a_pytorch.transforms.ToTensorV2()
     ])
@@ -240,13 +238,7 @@ if __name__ == '__main__':
 
     data_loader_test = torch.utils.data.DataLoader(dataset=test_data,
                                                    batch_size=_batch_size,
-                                                   shuffle=True, num_workers=_num_workers, pin_memory=True)
-
-    if "true" in args.model_path or "True" in args.model_path:
-        args.balance_weights = True
-
-    if "false" in args.model_path or "False" in args.model_path:
-        args.balance_weights = False
+                                                   shuffle=False, num_workers=_num_workers, pin_memory=True)
 
     test_accuracy, test_report = calculate_test_accuracy(global_model,
                                                          data_loader_test,
