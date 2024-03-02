@@ -111,7 +111,7 @@ def calculate_test_accuracy(
     plt.rcParams.update({'font.size': 16})
     plt.figure(figsize=(10, 5))
     sn.heatmap(df_cm, annot=True, cmap='viridis', fmt='g')
-    Path(os.path.join(BASE_PATH,args.image_model)).mkdir(parents=True, exist_ok=True)    
+    Path(os.path.join(BASE_PATH,args.image_model)).mkdir(parents=True, exist_ok=True)
     plt.savefig(
         os.path.join(BASE_PATH,args.image_model,
                      'conf_matrix_image_model_{}_test_set_acc_{:.2f}.png'.format(
@@ -157,6 +157,10 @@ if __name__ == '__main__':
         global_model = EffNetB4(_num_classes, args.tl)
         input_size = eff_net_sizes[args.image_model]
         _batch_size = 32
+    elif args.image_model == "b5":
+        global_model = EffNetB5(_num_classes, args.tl)
+        input_size = eff_net_sizes[args.image_model]
+        _batch_size = 16        
     elif args.image_model == "eff_v2_small":
         global_model = EffNetV2_S(_num_classes, args.tl)
         input_size = eff_net_sizes[args.image_model]
