@@ -32,6 +32,7 @@ from datetime import datetime
 import os
 import pytz
 from pathlib import Path
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 _num_classes = 4
 
@@ -202,13 +203,13 @@ def save_model_weights(model, text_model_name, image_model_name, epoch_num, val_
     Path(os.path.join(BASE_PATH,base)).mkdir(parents=True, exist_ok=True)    
 
     if fine_tuning:
-        filename = os.path.join(BASE_PATH, "model_weights/BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_FractionLR_{}_OPT_{}_VAL_ACC_{:.3f}_".format(
-            text_model_name+"_"+image_model_name, epoch_num+1, args.lr, args.reg, args.fraction_lr, opt, val_acc))
+        filename = "BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_FractionLR_{}_OPT_{}_VAL_ACC_{:.3f}_".format(
+            text_model_name+"_"+image_model_name, epoch_num+1, args.lr, args.reg, args.fraction_lr, opt, val_acc)
 
     else:
 
-        filename = os.path.join(BASE_PATH, "model_weights/BEST_model_{}_epoch_{}_LR_{}_Reg_{}_VAL_ACC_{:.3f}_".format(
-            text_model_name+"_"+image_model_name, epoch_num+1, args.lr, args.reg, val_acc))
+        filename = "BEST_model_{}_epoch_{}_LR_{}_Reg_{}_VAL_ACC_{:.3f}_".format(
+            text_model_name+"_"+image_model_name, epoch_num+1, args.lr, args.reg, val_acc)
 
     full_path = os.path.join(BASE_PATH,base,filename)
     full_path = full_path + ".pth"
@@ -264,21 +265,24 @@ if __name__ == '__main__':
             args.model_dropout,
             args.image_text_dropout,
             args.image_prob_dropout,
-            args.num_neurons_FC)
+            args.num_neurons_FC,
+            args.text_model)
     elif args.late_fusion == "classic":
         global_model = EffV2MediumAndDistilbertClassic(
             _num_classes,
             args.model_dropout,
             args.image_text_dropout,
             args.image_prob_dropout,
-            args.num_neurons_FC)
+            args.num_neurons_FC,
+            args.text_model)
     elif args.late_fusion == "normalized":
         global_model = EffV2MediumAndDistilbertNormalized(
             _num_classes,
             args.model_dropout,
             args.image_text_dropout,
             args.image_prob_dropout,
-            args.num_neurons_FC)        
+            args.num_neurons_FC,
+            args.text_model)        
     else:
         print("Wrong late fusion strategy: ", args.late_fusion)
         sys.exit(1)

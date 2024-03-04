@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
 from transformers import DistilBertModel, DistilBertConfig
+from transformers import BertModel, BertConfig
 from torchvision.models import *
 from transformers import DistilBertTokenizer
+from transformers import BertTokenizer
 from random import randint
 import random
 from torch.nn import functional as F
@@ -32,6 +34,15 @@ def distilbert():
 
     return model
 
+def bert():
+
+    model = BertModel.from_pretrained("bert-base-uncased")
+
+    for param in model.parameters():
+        param.requires_grad = False
+
+    return model
+
 
 class EffV2MediumAndDistilbertGated(nn.Module):
 
@@ -40,11 +51,17 @@ class EffV2MediumAndDistilbertGated(nn.Module):
                  drop_ratio,
                  image_text_dropout,
                  img_prob_dropout,
-                 num_neurons_fc):
+                 num_neurons_fc,
+                 text_model_name):
         super(EffV2MediumAndDistilbertGated, self).__init__()
 
-        self.text_model_name = "distilbert-base-uncased"
-        self.text_model = distilbert()
+        self.text_model_name = text_model_name
+        
+        if text_model_name == "bert":     
+            self.text_model = bert()
+        elif text_model_name == "distilbert":     
+            self.text_model = distilbert()
+            
         self.image_model = eff_net_v2()
 
         self.drop = nn.Dropout(p=drop_ratio)
@@ -159,13 +176,23 @@ class EffV2MediumAndDistilbertGated(nn.Module):
         return final_output
 
     def get_tokenizer(self):
-        return DistilBertTokenizer.from_pretrained(self.text_model_name)
+        if self.text_model_name == "bert":
+            self.tokenizer = BertTokenizer.from_pretrained(self.text_model_name)
+        elif self.text_model_name == "distilbert":
+            self.tokenizer = DistilBertTokenizer.from_pretrained(self.text_model_name)
+        
+        return self.tokenizer
 
     def get_image_size(self):
         return (480, 480)
 
     def get_max_token_size(self):
-        return DistilBertConfig().max_position_embeddings
+        if self.text_model_name == "bert":
+            self.config = BertConfig().max_position_embeddings
+        elif self.text_model_name == "distilbert":
+            self.config = DistilBertConfig().max_position_embeddings
+        
+        return self.config
 
     def drop_modalities(self, _eval, remove_image, remove_text):
         # During evaluation we want to use the dropout
@@ -200,7 +227,6 @@ class EffV2MediumAndDistilbertGated(nn.Module):
                     self._attention_mask = self.text_dropout(self._attention_mask)
             else:
                 print("    Train: using both\n")
-
 
 
 class EffV2MediumAndDistilbertClassic(EffV2MediumAndDistilbertGated):
@@ -283,10 +309,11 @@ class EffV2MediumAndDistilbertNormalized(EffV2MediumAndDistilbertGated):
         image_hidden_size = self.image_to_hidden_size(image_features)
         text_hidden_size = self.text_to_hidden_size(text_features)
 
+        image_hidden_size = image_hidden_size / image_hidden_size.norm(dim=1, keepdim=True)
+        text_hidden_size = text_hidden_size / text_hidden_size.norm(dim=1, keepdim=True)
+
         image_plus_text_features = torch.cat(
             (image_hidden_size, text_hidden_size), dim=1)
-
-        image_plus_text_features = F.normalize(image_plus_text_features)
 
         after_concat = self.concat_layer(image_plus_text_features)
         after_drop = self.drop(after_concat)

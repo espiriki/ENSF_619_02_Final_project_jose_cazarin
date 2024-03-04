@@ -196,13 +196,13 @@ def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tu
     Path(os.path.join(BASE_PATH,base)).mkdir(parents=True, exist_ok=True)    
 
     if fine_tuning:
-        filename = os.path.join(BASE_PATH, "model_weights/BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_FractionLR_{}_OPT_{}_VAL_ACC_{:.3f}_".format(
-            model_name, epoch_num+1, args.lr, args.reg, args.fraction_lr, opt, val_acc))
+        filename = "BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_FractionLR_{}_OPT_{}_VAL_ACC_{:.3f}_".format(
+            model_name, epoch_num+1, args.lr, args.reg, args.fraction_lr, opt, val_acc)
 
     else:
 
-        filename = os.path.join(BASE_PATH, "model_weights/BEST_model_{}_epoch_{}_LR_{}_Reg_{}_VAL_ACC_{:.3f}_".format(
-            model_name, epoch_num+1, args.lr, args.reg, val_acc))
+        filename = "BEST_model_{}_epoch_{}_LR_{}_Reg_{}_VAL_ACC_{:.3f}_".format(
+            model_name, epoch_num+1, args.lr, args.reg, val_acc)
 
     full_path = os.path.join(BASE_PATH,base,filename)
     full_path = full_path + ".pth"

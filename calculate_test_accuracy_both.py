@@ -184,7 +184,7 @@ if __name__ == '__main__':
         keep_aspect_ratio.PadToMaintainAR(aspect_ratio=AR_INPUT),
         A.Resize(width=WIDTH,
                  height=HEIGHT,
-                 interpolation=cv2.INTER_CUBIC),
+                 interpolation=cv2.INTER_LINEAR),
         normalize_transform,
         a_pytorch.transforms.ToTensorV2()
     ])
