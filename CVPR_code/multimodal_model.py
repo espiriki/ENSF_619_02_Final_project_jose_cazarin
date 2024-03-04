@@ -9,6 +9,7 @@ from random import randint
 import random
 from torch.nn import functional as F
 import numpy as np
+import sys
 
 def decision(probability):
     return np.random.rand(1)[0] < probability
@@ -61,6 +62,9 @@ class EffV2MediumAndDistilbertGated(nn.Module):
             self.text_model = bert()
         elif text_model_name == "distilbert":     
             self.text_model = distilbert()
+        else:
+            print("Wrong text model:", text_model_name)
+            sys.exit(1)
             
         self.image_model = eff_net_v2()
 
@@ -177,9 +181,9 @@ class EffV2MediumAndDistilbertGated(nn.Module):
 
     def get_tokenizer(self):
         if self.text_model_name == "bert":
-            self.tokenizer = BertTokenizer.from_pretrained(self.text_model_name)
+            self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         elif self.text_model_name == "distilbert":
-            self.tokenizer = DistilBertTokenizer.from_pretrained(self.text_model_name)
+            self.tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
         
         return self.tokenizer
 

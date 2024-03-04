@@ -308,9 +308,6 @@ class DatasetFolder(VisionDataset):
             tokens_dict['tokens'] = encoding['input_ids'].flatten()
             tokens_dict['attention_mask'] = encoding['attention_mask'].flatten()
 
-            tokens_dict['tokens'] = encoding['input_ids'].flatten()
-            tokens_dict['attention_mask'] = encoding['attention_mask'].flatten()
-
         image_dict = {
             'raw_image': sample_image,
             'image_path': path['image']

@@ -251,7 +251,6 @@ if __name__ == '__main__':
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    args.text_model = "DistilBert"
     args.image_model = "EffNetv2-Medium"
 
     print("Text Model: {}".format(args.text_model))
