@@ -286,8 +286,12 @@ if __name__ == '__main__':
         print("Wrong late fusion strategy: ", args.late_fusion)
         sys.exit(1)
 
-    _batch_size = 16
-    _batch_size_FT = 16
+    if args.text_model == "bart":
+        _batch_size = 32
+        _batch_size_FT = 2
+    else:
+        _batch_size = 16
+        _batch_size_FT = 16        
 
     print("Num total parameters of the model: {}".format(
         count_parameters(global_model)))

@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
-from transformers import DistilBertModel, DistilBertConfig
+from transformers import DistilBertModel, DistilBertConfig, BartConfig, BartForSequenceClassification
 from transformers import BertModel, BertConfig
 from torchvision.models import *
-from transformers import DistilBertTokenizer
+from transformers import DistilBertTokenizer, BartTokenizer
 from transformers import BertTokenizer
 from random import randint
 import random
@@ -29,6 +29,15 @@ def eff_net_v2():
 def distilbert():
 
     model = DistilBertModel.from_pretrained("distilbert-base-uncased")
+
+    for param in model.parameters():
+        param.requires_grad = False
+
+    return model
+
+def bart():
+
+    model = BartForSequenceClassification.from_pretrained("facebook/bart-large")
 
     for param in model.parameters():
         param.requires_grad = False
@@ -62,6 +71,8 @@ class EffV2MediumAndDistilbertGated(nn.Module):
             self.text_model = bert()
         elif text_model_name == "distilbert":     
             self.text_model = distilbert()
+        elif text_model_name == "bart":     
+            self.text_model = bart()            
         else:
             print("Wrong text model:", text_model_name)
             sys.exit(1)
@@ -184,6 +195,8 @@ class EffV2MediumAndDistilbertGated(nn.Module):
             self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         elif self.text_model_name == "distilbert":
             self.tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
+        elif self.text_model_name == "bart":
+            self.tokenizer = BartTokenizer.from_pretrained("facebook/bart-large")            
         
         return self.tokenizer
 
@@ -195,6 +208,8 @@ class EffV2MediumAndDistilbertGated(nn.Module):
             self.config = BertConfig().max_position_embeddings
         elif self.text_model_name == "distilbert":
             self.config = DistilBertConfig().max_position_embeddings
+        elif self.text_model_name == "bart":
+            self.config = BartConfig().max_position_embeddings            
         
         return self.config
 
