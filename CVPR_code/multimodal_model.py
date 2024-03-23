@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from transformers import DistilBertModel, DistilBertConfig, BartConfig, BartForSequenceClassification
+from transformers import BartModel
 from transformers import BertModel, BertConfig
 from torchvision.models import *
 from transformers import DistilBertTokenizer, BartTokenizer
@@ -37,7 +38,7 @@ def distilbert():
 
 def bart():
 
-    model = BartForSequenceClassification.from_pretrained("facebook/bart-large")
+    model = BartModel.from_pretrained("facebook/bart-large")
 
     for param in model.parameters():
         param.requires_grad = False
@@ -72,7 +73,7 @@ class EffV2MediumAndDistilbertGated(nn.Module):
         elif text_model_name == "distilbert":     
             self.text_model = distilbert()
         elif text_model_name == "bart":     
-            self.text_model = bart()            
+            self.text_model = bart()
         else:
             print("Wrong text model:", text_model_name)
             sys.exit(1)
@@ -92,6 +93,7 @@ class EffV2MediumAndDistilbertGated(nn.Module):
             nn.Linear(1280,
                       out_features=self.fc_layer_neurons)
 
+        print("Text model hidden size:",self.text_model.config.hidden_size)
         self.text_to_hidden_size = \
             nn.Linear(in_features=self.text_model.config.hidden_size,
                       out_features=self.fc_layer_neurons)
