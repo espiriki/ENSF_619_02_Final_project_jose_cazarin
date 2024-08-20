@@ -57,5 +57,8 @@ def args_parser():
     parser.add_argument('--late_fusion', type=str, default="gated",
                         help='Which late fusion strategy to use')
 
+    parser.add_argument('--label_smoothing', type=float, default=0.0,
+                        help='Fraction to use Label Smoothing')
+
     args = parser.parse_args()
     return args

@@ -85,7 +85,7 @@ def get_class_weights(train_dataset_path):
 
 
 def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
-                  batch_size, train_optimizer, weights, use_class_weights, acc_steps):
+                  batch_size, train_optimizer, weights, use_class_weights, acc_steps, smoothing):
 
     batch_loss = []
     n_batches = math.ceil((len_train_data/batch_size))
@@ -93,9 +93,9 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
     opt_weights = torch.FloatTensor(weights).cuda()
 
     if use_class_weights is True:
-        criterion = torch.nn.CrossEntropyLoss(weight=opt_weights).to(hw_device)
+        criterion = torch.nn.CrossEntropyLoss(weight=opt_weights,label_smoothing=smoothing).to(hw_device)
     else:
-        criterion = torch.nn.CrossEntropyLoss().to(hw_device)
+        criterion = torch.nn.CrossEntropyLoss(label_smoothing=smoothing).to(hw_device)
 
     print("Using device: {}".format(hw_device))
     for batch_idx, (data, labels) in enumerate(data_loader):
@@ -418,7 +418,8 @@ if __name__ == '__main__':
                                                           optimizer,
                                                           class_weights,
                                                           args.balance_weights,
-                                                          args.acc_steps)
+                                                          args.acc_steps,
+                                                          args.label_smoothing)
 
         elapsed_time = time.time() - st
         print('Epoch time: {:.1f}'.format(elapsed_time))
@@ -503,7 +504,8 @@ if __name__ == '__main__':
                                                                     optimizer,
                                                                     class_weights,
                                                                     args.balance_weights,
-                                                                    args.acc_steps)
+                                                                    args.acc_steps,
+                                                                    args.label_smoothing)
             elapsed_time = time.time() - st
             print('Fine Tuning: epoch time: {:.1f}'.format(elapsed_time))
 

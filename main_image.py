@@ -83,7 +83,7 @@ def get_class_weights(train_dataset_path):
 
 
 def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
-                  batch_size, train_optimizer, weights, use_class_weights, acc_steps):
+                  batch_size, train_optimizer, weights, use_class_weights, acc_steps, smoothing):
 
     batch_loss = []
     n_batches = math.ceil((len_train_data/batch_size))
@@ -91,9 +91,9 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
     opt_weights = torch.FloatTensor(weights).cuda()
 
     if use_class_weights is True:
-        criterion = torch.nn.CrossEntropyLoss(weight=opt_weights).to(hw_device)
+        criterion = torch.nn.CrossEntropyLoss(weight=opt_weights, label_smoothing=smoothing).to(hw_device)
     else:
-        criterion = torch.nn.CrossEntropyLoss().to(hw_device)
+        criterion = torch.nn.CrossEntropyLoss(label_smoothing=smoothing).to(hw_device)
 
     print("Using device: {}".format(hw_device))
     for batch_idx, (data, labels) in enumerate(data_loader):
@@ -441,8 +441,15 @@ if __name__ == '__main__':
         A.Resize(width=WIDTH,
                  height=HEIGHT,
                  interpolation=cv2.INTER_LINEAR),
+        # A.ISONoise(p=prob_augmentations),
+        # A.Spatter(p=prob_augmentations),
+        # A.GaussNoise(p=prob_augmentations),
+        A.GaussianBlur(p=prob_augmentations),
+        # A.GlassBlur(p=prob_augmentations),
+        # A.MotionBlur(p=prob_augmentations),
+        # A.AdvancedBlur(p=prob_augmentations), 
         A.VerticalFlip(p=prob_augmentations),
-        A.HorizontalFlip(p=prob_augmentations),
+        A.HorizontalFlip(p=prob_augmentations), 
         A.RandomBrightnessContrast(p=prob_augmentations),
         A.Sharpen(p=prob_augmentations),
         A.Perspective(p=prob_augmentations,
@@ -453,7 +460,7 @@ if __name__ == '__main__':
                            interpolation=cv2.INTER_LINEAR,
                            border_mode=cv2.BORDER_CONSTANT,
                            value=0, p=prob_augmentations,
-                           scale_limit=0.3),
+                           scale_limit=0.5),
         normalize_transform,
         a_pytorch.transforms.ToTensorV2()
     ])
@@ -533,7 +540,7 @@ if __name__ == '__main__':
     global_model.to(device)
     max_val_accuracy = 0.0
     best_epoch = 0
-    scheduler = ReduceLROnPlateau(optimizer, 'max',factor=0.4,verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer, 'max',factor=0.2,verbose=True)
 
     for epoch in range(args.epochs):
 
@@ -549,7 +556,8 @@ if __name__ == '__main__':
                                                           optimizer,
                                                           class_weights,
                                                           args.balance_weights,
-                                                          args.acc_steps)
+                                                          args.acc_steps,
+                                                          args.label_smoothing)
 
         elapsed_time = time.time() - st
         print('Epoch time: {:.1f}'.format(elapsed_time))
@@ -634,7 +642,8 @@ if __name__ == '__main__':
                                                        optimizer,
                                                        class_weights,
                                                        args.balance_weights,
-                                                       args.acc_steps)
+                                                       args.acc_steps,
+                                                       args.label_smoothing)
             elapsed_time = time.time() - st
             print('Fine Tuning: epoch time: {:.1f}'.format(elapsed_time))
 
