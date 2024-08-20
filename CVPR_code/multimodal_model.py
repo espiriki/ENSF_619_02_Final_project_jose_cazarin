@@ -132,7 +132,7 @@ class EffV2MediumAndDistilbertGated(nn.Module):
         self.batch_size = batch_size
 
         self.trans_conv = nn.ConvTranspose1d(
-            in_channels=8, out_channels=16, kernel_size=2, stride=2)
+            in_channels=8, out_channels=8, kernel_size=2, stride=2, padding=0, output_padding=0)
 
         # 0.07 is the temperature parameter
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
