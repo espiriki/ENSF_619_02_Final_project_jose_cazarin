@@ -63,7 +63,8 @@ class EffV2MediumAndDistilbertGated(nn.Module):
                  image_text_dropout,
                  img_prob_dropout,
                  num_neurons_fc,
-                 text_model_name):
+                 text_model_name,
+                 batch_size):
         super(EffV2MediumAndDistilbertGated, self).__init__()
 
         self.text_model_name = text_model_name
@@ -125,6 +126,12 @@ class EffV2MediumAndDistilbertGated(nn.Module):
         # FC layer to classes
         self.fc_layer_gated = \
             nn.Linear(self.gated_output_hidden_size, n_classes)
+
+        # FC layer to classes
+        self.clip_fc_layer = nn.Linear(batch_size, n_classes)
+
+        # 0.07 is the temperature parameter
+        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
     def forward(self,
                 _input_ids,
@@ -384,8 +391,8 @@ class EffV2MediumAndDistilbertCLIP(EffV2MediumAndDistilbertGated):
         # cosine similarity as logits
         logit_scale = self.logit_scale.exp()
         logits_per_image = logit_scale * image_features @ text_features.t()
-        logits_per_text = logits_per_image.t()
+        # logits_per_text = logits_per_image.t()
 
-        final_output = self.fc_layer(logits_per_image+logits_per_text)
+        final_output = self.clip_fc_layer(logits_per_image)
 
         return final_output

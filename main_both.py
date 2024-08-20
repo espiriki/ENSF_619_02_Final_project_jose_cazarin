@@ -257,6 +257,12 @@ if __name__ == '__main__':
     print("Image Model: {}".format(args.image_model))
 
     global_model = None
+    if args.text_model == "bart":
+        _batch_size = 32
+        _batch_size_FT = 2
+    else:
+        _batch_size = 16
+        _batch_size_FT = 16
 
     if args.late_fusion == "gated":
         global_model = EffV2MediumAndDistilbertGated(
@@ -289,17 +295,11 @@ if __name__ == '__main__':
             args.image_text_dropout,
             args.image_prob_dropout,
             args.num_neurons_FC,
-            args.text_model)        
+            args.text_model,
+            _batch_size)
     else:
         print("Wrong late fusion strategy: ", args.late_fusion)
         sys.exit(1)
-
-    if args.text_model == "bart":
-        _batch_size = 32
-        _batch_size_FT = 2
-    else:
-        _batch_size = 16
-        _batch_size_FT = 16        
 
     print("Num total parameters of the model: {}".format(
         count_parameters(global_model)))
