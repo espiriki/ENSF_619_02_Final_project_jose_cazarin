@@ -281,6 +281,14 @@ if __name__ == '__main__':
             args.image_text_dropout,
             args.image_prob_dropout,
             args.num_neurons_FC,
+            args.text_model)
+    elif args.late_fusion == "clip":
+        global_model = EffV2MediumAndDistilbertCLIP(
+            _num_classes,
+            args.model_dropout,
+            args.image_text_dropout,
+            args.image_prob_dropout,
+            args.num_neurons_FC,
             args.text_model)        
     else:
         print("Wrong late fusion strategy: ", args.late_fusion)

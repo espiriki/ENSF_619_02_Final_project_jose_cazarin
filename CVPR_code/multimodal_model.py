@@ -341,3 +341,51 @@ class EffV2MediumAndDistilbertNormalized(EffV2MediumAndDistilbertGated):
         final_output = self.fc_layer(after_drop)
 
         return final_output    
+
+
+
+class EffV2MediumAndDistilbertCLIP(EffV2MediumAndDistilbertGated):
+
+    def forward(self,
+                _input_ids,
+                _attention_mask,
+                _images,
+                eval=False,
+                remove_image=False,
+                remove_text=False):
+
+        print("CLIP forward")
+
+        # During evaluation we want to use the dropout
+        # to always remove only images or always remove
+        # only text
+
+        self._images=_images
+        self._input_ids=_input_ids
+        self._attention_mask=_attention_mask
+        self.drop_modalities(eval, remove_image, remove_text)
+
+        text_output = self.text_model(
+            input_ids=self._input_ids,
+            attention_mask=self._attention_mask
+        )
+        hidden_state = text_output[0]
+
+        text_features = hidden_state[:, 0]
+        image_features = self.image_model(self._images)
+
+        image_features = self.image_to_hidden_size(image_features)
+        text_features = self.text_to_hidden_size(text_features)
+
+        # normalized features
+        image_features = image_features / image_features.norm(dim=1, keepdim=True)
+        text_features = text_features / text_features.norm(dim=1, keepdim=True)
+
+        # cosine similarity as logits
+        logit_scale = self.logit_scale.exp()
+        logits_per_image = logit_scale * image_features @ text_features.t()
+        logits_per_text = logits_per_image.t()
+
+        final_output = self.fc_layer(logits_per_image+logits_per_text)
+
+        return final_output
