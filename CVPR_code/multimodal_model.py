@@ -137,6 +137,19 @@ class EffV2MediumAndDistilbertGated(nn.Module):
         # 0.07 is the temperature parameter
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
+        self.image_to_MMF_hidden_size = nn.Linear(1280, out_features=128)
+        self.text_to_MMF_hidden_size = nn.Linear(
+            in_features=self.text_model.config.hidden_size, out_features=128)
+        self.MMF_relu = nn.ReLU()
+
+        self.W_grande_1 = torch.nn.Linear(128, 128)
+        self.w1 = torch.rand(128, 16)
+        self.w1 = torch.nn.Parameter(
+            torch.nn.init.xavier_uniform_(self.w1))
+
+        self.MMF_output = torch.nn.Linear(128, 4)
+
+
     def forward(self,
                 _input_ids,
                 _attention_mask,
@@ -404,5 +417,61 @@ class EffV2MediumAndDistilbertCLIP(EffV2MediumAndDistilbertGated):
         # print("logits_per_image after max pool: ", logits_per_image.shape)
 
         final_output = self.clip_fc_layer(logits_per_image)
+
+        return final_output
+
+
+class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
+
+    def forward(self,
+                _input_ids,
+                _attention_mask,
+                _images,
+                eval=False,
+                remove_image=False,
+                remove_text=False):
+
+        print("MMF forward")
+
+        self._images = _images
+        self._input_ids = _input_ids
+        self._attention_mask = _attention_mask
+        self.drop_modalities(eval, remove_image, remove_text)
+
+        text_output = self.text_model(
+            input_ids=self._input_ids,
+            attention_mask=self._attention_mask
+        )
+        hidden_state = text_output[0]
+
+        text_features = hidden_state[:, 0]
+        image_features = self.image_model(self._images)
+
+        text_features = self.text_to_MMF_hidden_size(text_features)
+        image_features = self.image_to_MMF_hidden_size(image_features)
+
+        text_features_after_relu = self.MMF_relu(text_features)
+        image_features_after_relu = self.MMF_relu(image_features)
+
+        print("text_features_after_relu shape", text_features_after_relu.shape)
+        print("image_features_after_relu shape",
+              image_features_after_relu.shape)
+
+        Jf = (text_features_after_relu + image_features_after_relu) / 2
+
+        print("average shape", Jf.shape)
+
+        temp_o = self.W_grande_1(torch.squeeze(Jf, 1))
+        print('temp_o.shape: ', temp_o.shape)
+        utk = torch.tanh(temp_o)
+        print('utk.shape: ', utk.shape)
+        softmax_input = utk @ self.w1
+        print('softmax_input.shape: ', softmax_input.shape)
+        alfa_tk = F.softmax(softmax_input, dim=1)
+        print('alfa_tk.shape: ', alfa_tk.shape)
+        context = alfa_tk.T @ temp_o
+        print('context.shape: ', context.shape)
+
+        final_output = self.MMF_output(context)
 
         return final_output
