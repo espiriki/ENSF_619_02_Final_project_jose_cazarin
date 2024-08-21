@@ -397,15 +397,8 @@ class EffV2MediumAndDistilbertCLIP(EffV2MediumAndDistilbertGated):
         logits_per_image = logit_scale * image_features @ text_features.t()
         # logits_per_text = logits_per_image.t()
 
-        # print("logits per image shape: ", logits_per_image.shape)
         if logits_per_image.shape[0] != self.batch_size:
             print("using max unpool")
-            # max_unpool = nn.MaxUnpool1d(kernel_size=2, stride=2)
-            # trans_conv = nn.ConvTranspose1d(
-            #     in_channels=8, out_channels=16, kernel_size=2, stride=2)
-
-            # adding_dim = logits_per_image.unsqueeze(0)
-            # print("adding_dim shape: ", adding_dim.shape)
             logits_per_image = self.trans_conv(logits_per_image)
 
         # print("logits_per_image after max pool: ", logits_per_image.shape)
