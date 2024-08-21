@@ -144,8 +144,12 @@ class EffV2MediumAndDistilbertGated(nn.Module):
 
         self.W_grande_1 = torch.nn.Linear(128, 128)
         self.w1 = torch.rand(128, 16)
+        self.w1_final_batch = torch.rand(128, 8)
+
         self.w1 = torch.nn.Parameter(
             torch.nn.init.xavier_uniform_(self.w1))
+        self.w1_final_batch = torch.nn.Parameter(
+            torch.nn.init.xavier_uniform_(self.w1_final_batch))
 
         self.MMF_output = torch.nn.Linear(128, 4)
 
@@ -465,7 +469,12 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
         print('temp_o.shape: ', temp_o.shape)
         utk = torch.tanh(temp_o)
         print('utk.shape: ', utk.shape)
-        softmax_input = utk @ self.w1
+
+        if utk.shape[0] != 16:
+            softmax_input = utk @ self.w1_final_batch
+        else:
+            softmax_input = utk @ self.w1
+
         print('softmax_input.shape: ', softmax_input.shape)
         alfa_tk = F.softmax(softmax_input, dim=1)
         print('alfa_tk.shape: ', alfa_tk.shape)
