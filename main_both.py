@@ -287,7 +287,8 @@ if __name__ == '__main__':
             args.image_text_dropout,
             args.image_prob_dropout,
             args.num_neurons_FC,
-            args.text_model)
+            args.text_model,
+            _batch_size)
     elif args.late_fusion == "clip":
         global_model = EffV2MediumAndDistilbertCLIP(
             _num_classes,

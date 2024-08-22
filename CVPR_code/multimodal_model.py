@@ -154,15 +154,19 @@ class EffV2MediumAndDistilbertGated(nn.Module):
 
         self.MMF_128_to_256 = torch.nn.Linear(128, 256)
         self.MMF_256_to_128 = torch.nn.Linear(256, 128)
-        self.MMF_dropout = nn.Dropout(p=0.2)
+        self.MMF_dropout_20_percent = nn.Dropout(p=0.2)
 
         self.softmax = nn.Softmax(dim=1)
 
-        self.text_to_output = nn.Linear(
-            in_features=self.text_model.config.hidden_size, out_features=4)
-        self.image_to_output = nn.Linear(1280, out_features=4)
+        self.text_to_output = nn.Linear(128, out_features=4)
+        self.image_to_output = nn.Linear(128, out_features=4)
 
         self.MMF_output_weights = nn.Parameter(torch.tensor([1.0, 1.0, 1.0]))
+
+        self.text_to_128 = nn.Linear(
+            in_features=self.text_model.config.hidden_size, out_features=128)
+        self.image_to_128 = nn.Linear(1280, out_features=128)
+        self.MMF_dropout_50_percent = nn.Dropout(p=0.5)
 
 
     def forward(self,
@@ -276,8 +280,8 @@ class EffV2MediumAndDistilbertGated(nn.Module):
                 pass
         # Training
         else:
-            print("self.image_or_text_dropout_chance: ",
-                  self.image_or_text_dropout_chance)
+            # print("self.image_or_text_dropout_chance: ",
+            #       self.image_or_text_dropout_chance)
             if decision(self.image_or_text_dropout_chance):
                 image_or_text = decision(self.img_dropout_prob)
                 if image_or_text:
@@ -461,31 +465,33 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
         )
         hidden_state = text_output[0]
 
-        text_features = hidden_state[:, 0]
-        image_features = self.image_model(self._images)
+        original_text_features = hidden_state[:, 0]
+        original_image_features = self.image_model(self._images)
 
-        text_out = self.text_to_output(text_features)
-        image_out = self.image_to_output(image_features)
+        # Uni modal outputs
+        t1 = self.MMF_dropout_50_percent(original_text_features)
+        i1 = self.MMF_dropout_50_percent(original_image_features)
 
-        text_out = self.softmax(text_out)
-        image_out = self.softmax(image_out)
+        t2 = self.text_to_128(t1)
+        i2 = self.image_to_128(i1)
 
-        # print("text out shape", text_out.shape)
-        # print("image out shape", image_out.shape)
+        t3 = self.MMF_relu(t2)
+        i3 = self.MMF_relu(i2)
 
-        text_features = self.text_to_MMF_hidden_size(text_features)
-        image_features = self.image_to_MMF_hidden_size(image_features)
+        # Shape: BS, 4 (classes)
+        text_out = self.text_to_output(t3)
+        image_out = self.image_to_output(i3)
 
-        text_features_after_relu = self.MMF_relu(text_features)
-        image_features_after_relu = self.MMF_relu(image_features)
+        # Starting MMF output
+        text_after_MMF_hidden_size = self.text_to_MMF_hidden_size(
+            original_text_features)
+        image_after_MMF_hidden_size = self.image_to_MMF_hidden_size(
+            original_image_features)
 
-        # print("text_features_after_relu shape", text_features_after_relu.shape)
-        # print("image_features_after_relu shape",
-        #       image_features_after_relu.shape)
+        text_features_after_relu = self.MMF_relu(text_after_MMF_hidden_size)
+        image_features_after_relu = self.MMF_relu(image_after_MMF_hidden_size)
 
         Jf = (text_features_after_relu + image_features_after_relu) / 2
-
-        # print("average shape", Jf.shape)
 
         temp_o = self.W_grande_1(torch.squeeze(Jf, 1))
         # print('temp_o.shape: ', temp_o.shape)
@@ -503,31 +509,28 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
         context = alfa_tk.T @ temp_o
         # print('context.shape: ', context.shape)
 
-        final_output = self.MMF_output(context)
-
-        # print('final_output.shape: ', final_output.shape)
-
+        # Do the self attention
         with_self_attention = context * Jf
 
         x1 = self.MMF_128_to_256(with_self_attention)
         x1 = self.MMF_relu(x1)
         x2 = self.MMF_256_to_128(x1)
         x2 = self.MMF_relu(x2)
-        x3 = self.MMF_dropout(x2)
+        x3 = self.MMF_dropout_20_percent(x2)
         final_output = self.MMF_output(x3)
-        output_softmax = self.softmax(final_output)
+        # output_softmax = self.softmax(final_output)
 
-        print("self.MMF_output_weights:", self.MMF_output_weights)
+        # print("self.MMF_output_weights:", self.MMF_output_weights)
 
         normalized_weights = torch.softmax(self.MMF_output_weights, dim=0)
 
-        # print("normalized_weights:", normalized_weights)
+        print("normalized_weights:", normalized_weights)
 
         # print("torch.sum(normalized_weights)", torch.sum(normalized_weights))
 
         weighted_avg = ((image_out * normalized_weights[0]) +
                         (text_out * normalized_weights[1]) +
-                        (output_softmax * normalized_weights[2]))
+                        (final_output * normalized_weights[2]))
 
         # print("weighted_avg shape", weighted_avg.shape)
 
