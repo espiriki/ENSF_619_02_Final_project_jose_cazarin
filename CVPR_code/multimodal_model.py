@@ -14,7 +14,6 @@ import sys
 
 def decision(probability):
     return np.random.rand(1)[0] < probability
-    # smaller 0.2 -> True
 
 def eff_net_v2():
 
@@ -60,7 +59,7 @@ class EffV2MediumAndDistilbertGated(nn.Module):
     def __init__(self,
                  n_classes,
                  drop_ratio,
-                 image_text_dropout,
+                 image_or_text_dropout_chance,
                  img_prob_dropout,
                  num_neurons_fc,
                  text_model_name,
@@ -86,7 +85,7 @@ class EffV2MediumAndDistilbertGated(nn.Module):
 
         self.image_dropout = nn.Dropout2d(p=1.0)
         self.text_dropout = nn.Dropout1d(p=1.0)
-        self.prob_image_text_dropout = image_text_dropout
+        self.image_or_text_dropout_chance = image_or_text_dropout_chance
         self.img_dropout_prob = img_prob_dropout
 
         # 1280 from image + 768 from text
@@ -277,7 +276,9 @@ class EffV2MediumAndDistilbertGated(nn.Module):
                 pass
         # Training
         else:
-            if decision(self.prob_image_text_dropout):
+            print("self.image_or_text_dropout_chance: ",
+                  self.image_or_text_dropout_chance)
+            if decision(self.image_or_text_dropout_chance):
                 image_or_text = decision(self.img_dropout_prob)
                 if image_or_text:
                     print("    Train: zeroing image\n")
