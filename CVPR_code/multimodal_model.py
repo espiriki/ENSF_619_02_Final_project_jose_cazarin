@@ -153,6 +153,18 @@ class EffV2MediumAndDistilbertGated(nn.Module):
 
         self.MMF_output = torch.nn.Linear(128, 4)
 
+        self.MMF_128_to_256 = torch.nn.Linear(128, 256)
+        self.MMF_256_to_128 = torch.nn.Linear(256, 128)
+        self.MMF_dropout = nn.Dropout(p=0.2)
+
+        self.softmax = nn.Softmax(dim=1)
+
+        self.text_to_output = nn.Linear(
+            in_features=self.text_model.config.hidden_size, out_features=4)
+        self.image_to_output = nn.Linear(1280, out_features=4)
+
+        self.MMF_output_weights = nn.Parameter(torch.tensor([1.0, 1.0, 1.0]))
+
 
     def forward(self,
                 _input_ids,
@@ -451,36 +463,71 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
         text_features = hidden_state[:, 0]
         image_features = self.image_model(self._images)
 
+        text_out = self.text_to_output(text_features)
+        image_out = self.image_to_output(image_features)
+
+        text_out = self.softmax(text_out)
+        image_out = self.softmax(image_out)
+
+        # print("text out shape", text_out.shape)
+        # print("image out shape", image_out.shape)
+
         text_features = self.text_to_MMF_hidden_size(text_features)
         image_features = self.image_to_MMF_hidden_size(image_features)
 
         text_features_after_relu = self.MMF_relu(text_features)
         image_features_after_relu = self.MMF_relu(image_features)
 
-        print("text_features_after_relu shape", text_features_after_relu.shape)
-        print("image_features_after_relu shape",
-              image_features_after_relu.shape)
+        # print("text_features_after_relu shape", text_features_after_relu.shape)
+        # print("image_features_after_relu shape",
+        #       image_features_after_relu.shape)
 
         Jf = (text_features_after_relu + image_features_after_relu) / 2
 
-        print("average shape", Jf.shape)
+        # print("average shape", Jf.shape)
 
         temp_o = self.W_grande_1(torch.squeeze(Jf, 1))
-        print('temp_o.shape: ', temp_o.shape)
+        # print('temp_o.shape: ', temp_o.shape)
         utk = torch.tanh(temp_o)
-        print('utk.shape: ', utk.shape)
+        # print('utk.shape: ', utk.shape)
 
         if utk.shape[0] != 16:
             softmax_input = utk @ self.w1_final_batch
         else:
             softmax_input = utk @ self.w1
 
-        print('softmax_input.shape: ', softmax_input.shape)
-        alfa_tk = F.softmax(softmax_input, dim=1)
-        print('alfa_tk.shape: ', alfa_tk.shape)
+        # print('softmax_input.shape: ', softmax_input.shape)
+        alfa_tk = self.softmax(softmax_input)
+        # print('alfa_tk.shape: ', alfa_tk.shape)
         context = alfa_tk.T @ temp_o
-        print('context.shape: ', context.shape)
+        # print('context.shape: ', context.shape)
 
         final_output = self.MMF_output(context)
 
-        return final_output
+        # print('final_output.shape: ', final_output.shape)
+
+        with_self_attention = context * Jf
+
+        x1 = self.MMF_128_to_256(with_self_attention)
+        x1 = self.MMF_relu(x1)
+        x2 = self.MMF_256_to_128(x1)
+        x2 = self.MMF_relu(x2)
+        x3 = self.MMF_dropout(x2)
+        final_output = self.MMF_output(x3)
+        output_softmax = self.softmax(final_output)
+
+        print("self.MMF_output_weights:", self.MMF_output_weights)
+
+        normalized_weights = torch.softmax(self.MMF_output_weights, dim=0)
+
+        # print("normalized_weights:", normalized_weights)
+
+        # print("torch.sum(normalized_weights)", torch.sum(normalized_weights))
+
+        weighted_avg = ((image_out * normalized_weights[0]) +
+                        (text_out * normalized_weights[1]) +
+                        (output_softmax * normalized_weights[2]))
+
+        # print("weighted_avg shape", weighted_avg.shape)
+
+        return weighted_avg
