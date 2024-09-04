@@ -146,19 +146,33 @@ class EffV2MediumAndDistilbertGated(nn.Module):
 
         self.W_grande_1 = torch.nn.Linear(
             self.MMF_hidden_size, self.MMF_hidden_size)
+
         self.w1 = torch.rand(self.MMF_hidden_size, 16)
         self.w1_final_batch = torch.rand(self.MMF_hidden_size, 8)
+
+        self.W_key = torch.rand(self.MMF_hidden_size, self.MMF_hidden_size)
+        self.W_key = torch.nn.Parameter(
+            torch.nn.init.xavier_uniform_(self.W_key))
 
         self.w1 = torch.nn.Parameter(
             torch.nn.init.xavier_uniform_(self.w1))
         self.w1_final_batch = torch.nn.Parameter(
             torch.nn.init.xavier_uniform_(self.w1_final_batch))
 
-        self.MMF_output = torch.nn.Linear(self.MMF_hidden_size, 4)
+        self.MMF_output_CA = torch.nn.Linear(self.MMF_hidden_size, 4)
+        self.MMF_output_ISA = torch.nn.Linear(self.MMF_hidden_size, 4)
+        self.MMF_output_TSA = torch.nn.Linear(self.MMF_hidden_size, 4)
 
-        self.MMF_128_to_256 = torch.nn.Linear(self.MMF_hidden_size, 256)
-        self.MMF_256_to_128 = torch.nn.Linear(256, self.MMF_hidden_size)
-        self.MMF_dropout_20_percent = nn.Dropout(p=0.2)
+        self.MMF_128_to_256_CA = torch.nn.Linear(self.MMF_hidden_size, 256)
+        self.MMF_256_to_128_CA = torch.nn.Linear(256, self.MMF_hidden_size)
+        self.MMF_128_to_256_ISA = torch.nn.Linear(self.MMF_hidden_size, 256)
+        self.MMF_256_to_128_ISA = torch.nn.Linear(256, self.MMF_hidden_size)
+        self.MMF_128_to_256_TSA = torch.nn.Linear(self.MMF_hidden_size, 256)
+        self.MMF_256_to_128_TSA = torch.nn.Linear(256, self.MMF_hidden_size)
+
+        self.MMF_dropout_20_percent_CA = nn.Dropout(p=0.2)
+        self.MMF_dropout_20_percent_ISA = nn.Dropout(p=0.2)
+        self.MMF_dropout_20_percent_TSA = nn.Dropout(p=0.2)
 
         self.softmax = nn.Softmax(dim=1)
 
@@ -320,6 +334,33 @@ class EffV2MediumAndDistilbertGated(nn.Module):
         with_self_attention = context * input_features
 
         return with_self_attention
+
+    def cross_attention_block(self, input_1, input_2):
+        # print("calling cross attention block")
+
+        temp_o = self.W_grande_1(torch.squeeze(input_1, 1))
+        # print('temp_o.shape: ', temp_o.shape)
+        utk = torch.tanh(temp_o)
+        # print('utk.shape: ', utk.shape)
+
+        values_2 = input_2 @ self.W_key
+
+        if utk.shape[0] != 16:
+            softmax_input = utk @ self.w1_final_batch
+        else:
+            softmax_input = utk @ self.w1
+
+        # print('softmax_input.shape: ', softmax_input.shape)
+        alfa_tk = self.softmax(softmax_input)
+        # print('alfa_tk.shape: ', alfa_tk.shape)
+        context = alfa_tk.T @ temp_o
+        # print('context.shape: ', context.shape)
+
+        # Do the self attention
+        with_self_attention = context * values_2
+
+        return with_self_attention
+
 
 
 class EffV2MediumAndDistilbertClassic(EffV2MediumAndDistilbertGated):
@@ -523,16 +564,37 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
         text_features_after_relu = self.MMF_relu(text_after_MMF_hidden_size)
         image_features_after_relu = self.MMF_relu(image_after_MMF_hidden_size)
 
-        Jf = (text_features_after_relu + image_features_after_relu) / 2
+        # Jf = (text_features_after_relu + image_features_after_relu) / 2
 
-        with_self_attention = self.self_attention_block(Jf)
+        image_self_attention = self.self_attention_block(
+            image_features_after_relu)
+        text_self_attention = self.self_attention_block(
+            text_features_after_relu)
 
-        x1 = self.MMF_128_to_256(with_self_attention)
-        x1 = self.MMF_relu(x1)
-        x2 = self.MMF_256_to_128(x1)
-        x2 = self.MMF_relu(x2)
-        x3 = self.MMF_dropout_20_percent(x2)
-        final_output = self.MMF_output(x3)
+        cross_attention = self.cross_attention_block(
+            text_features_after_relu, image_features_after_relu)
+
+        x1_CA = self.MMF_128_to_256_CA(cross_attention)
+        x1_CA = self.MMF_relu(x1_CA)
+        x2_CA = self.MMF_256_to_128_CA(x1_CA)
+        x2_CA = self.MMF_relu(x2_CA)
+        x3_CA = self.MMF_dropout_20_percent_CA(x2_CA)
+        final_output_CA = self.MMF_output_CA(x3_CA)
+
+        x1_ISA = self.MMF_128_to_256_ISA(image_self_attention)
+        x1_ISA = self.MMF_relu(x1_ISA)
+        x2_ISA = self.MMF_256_to_128_ISA(x1_ISA)
+        x2_ISA = self.MMF_relu(x2_ISA)
+        x3_ISA = self.MMF_dropout_20_percent_ISA(x2_ISA)
+        final_output_ISA = self.MMF_output_ISA(x3_ISA)
+
+        x1_TSA = self.MMF_128_to_256_TSA(text_self_attention)
+        x1_TSA = self.MMF_relu(x1_TSA)
+        x2_TSA = self.MMF_256_to_128_TSA(x1_TSA)
+        x2_TSA = self.MMF_relu(x2_TSA)
+        x3_TSA = self.MMF_dropout_20_percent_TSA(x2_TSA)
+        final_output_TSA = self.MMF_output_TSA(x3_TSA)
+
         # output_softmax = self.softmax(final_output)
 
         # print("self.MMF_output_weights:", self.MMF_output_weights)
@@ -541,11 +603,11 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
 
         print("normalized_weights:", normalized_weights)
 
-        # print("torch.sum(normalized_weights)", torch.sum(normalized_weights))
+        # # print("torch.sum(normalized_weights)", torch.sum(normalized_weights))
 
-        weighted_avg = ((image_out * normalized_weights[0]) +
-                        (text_out * normalized_weights[1]) +
-                        (final_output * normalized_weights[2]))
+        weighted_avg = ((final_output_CA * normalized_weights[0]) +
+                        (final_output_ISA * normalized_weights[1]) +
+                        (final_output_TSA * normalized_weights[2]))
 
         # print("weighted_avg shape", weighted_avg.shape)
 
