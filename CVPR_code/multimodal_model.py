@@ -136,36 +136,40 @@ class EffV2MediumAndDistilbertGated(nn.Module):
         # 0.07 is the temperature parameter
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
-        self.image_to_MMF_hidden_size = nn.Linear(1280, out_features=128)
+        self.MMF_hidden_size = 128
+
+        self.image_to_MMF_hidden_size = nn.Linear(
+            1280, out_features=self.MMF_hidden_size)
         self.text_to_MMF_hidden_size = nn.Linear(
-            in_features=self.text_model.config.hidden_size, out_features=128)
+            in_features=self.text_model.config.hidden_size, out_features=self.MMF_hidden_size)
         self.MMF_relu = nn.ReLU()
 
-        self.W_grande_1 = torch.nn.Linear(128, 128)
-        self.w1 = torch.rand(128, 16)
-        self.w1_final_batch = torch.rand(128, 8)
+        self.W_grande_1 = torch.nn.Linear(
+            self.MMF_hidden_size, self.MMF_hidden_size)
+        self.w1 = torch.rand(self.MMF_hidden_size, 16)
+        self.w1_final_batch = torch.rand(self.MMF_hidden_size, 8)
 
         self.w1 = torch.nn.Parameter(
             torch.nn.init.xavier_uniform_(self.w1))
         self.w1_final_batch = torch.nn.Parameter(
             torch.nn.init.xavier_uniform_(self.w1_final_batch))
 
-        self.MMF_output = torch.nn.Linear(128, 4)
+        self.MMF_output = torch.nn.Linear(self.MMF_hidden_size, 4)
 
-        self.MMF_128_to_256 = torch.nn.Linear(128, 256)
-        self.MMF_256_to_128 = torch.nn.Linear(256, 128)
+        self.MMF_128_to_256 = torch.nn.Linear(self.MMF_hidden_size, 256)
+        self.MMF_256_to_128 = torch.nn.Linear(256, self.MMF_hidden_size)
         self.MMF_dropout_20_percent = nn.Dropout(p=0.2)
 
         self.softmax = nn.Softmax(dim=1)
 
-        self.text_to_output = nn.Linear(128, out_features=4)
-        self.image_to_output = nn.Linear(128, out_features=4)
+        self.text_to_output = nn.Linear(self.MMF_hidden_size, out_features=4)
+        self.image_to_output = nn.Linear(self.MMF_hidden_size, out_features=4)
 
         self.MMF_output_weights = nn.Parameter(torch.tensor([1.0, 1.0, 1.0]))
 
         self.text_to_128 = nn.Linear(
-            in_features=self.text_model.config.hidden_size, out_features=128)
-        self.image_to_128 = nn.Linear(1280, out_features=128)
+            in_features=self.text_model.config.hidden_size, out_features=self.MMF_hidden_size)
+        self.image_to_128 = nn.Linear(1280, out_features=self.MMF_hidden_size)
         self.MMF_dropout_50_percent = nn.Dropout(p=0.5)
 
 
@@ -293,6 +297,29 @@ class EffV2MediumAndDistilbertGated(nn.Module):
                     self._attention_mask = self.text_dropout(self._attention_mask)
             else:
                 print("    Train: using both\n")
+
+    def self_attention_block(self, input_features):
+
+        temp_o = self.W_grande_1(torch.squeeze(input_features, 1))
+        # print('temp_o.shape: ', temp_o.shape)
+        utk = torch.tanh(temp_o)
+        # print('utk.shape: ', utk.shape)
+
+        if utk.shape[0] != 16:
+            softmax_input = utk @ self.w1_final_batch
+        else:
+            softmax_input = utk @ self.w1
+
+        # print('softmax_input.shape: ', softmax_input.shape)
+        alfa_tk = self.softmax(softmax_input)
+        # print('alfa_tk.shape: ', alfa_tk.shape)
+        context = alfa_tk.T @ temp_o
+        # print('context.shape: ', context.shape)
+
+        # Do the self attention
+        with_self_attention = context * input_features
+
+        return with_self_attention
 
 
 class EffV2MediumAndDistilbertClassic(EffV2MediumAndDistilbertGated):
@@ -468,6 +495,11 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
         original_text_features = hidden_state[:, 0]
         original_image_features = self.image_model(self._images)
 
+        original_text_features = original_text_features / \
+            original_text_features.norm(dim=1, keepdim=True)
+        original_image_features = original_image_features / \
+            original_image_features.norm(dim=1, keepdim=True)
+
         # Uni modal outputs
         t1 = self.MMF_dropout_50_percent(original_text_features)
         i1 = self.MMF_dropout_50_percent(original_image_features)
@@ -493,24 +525,7 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
 
         Jf = (text_features_after_relu + image_features_after_relu) / 2
 
-        temp_o = self.W_grande_1(torch.squeeze(Jf, 1))
-        # print('temp_o.shape: ', temp_o.shape)
-        utk = torch.tanh(temp_o)
-        # print('utk.shape: ', utk.shape)
-
-        if utk.shape[0] != 16:
-            softmax_input = utk @ self.w1_final_batch
-        else:
-            softmax_input = utk @ self.w1
-
-        # print('softmax_input.shape: ', softmax_input.shape)
-        alfa_tk = self.softmax(softmax_input)
-        # print('alfa_tk.shape: ', alfa_tk.shape)
-        context = alfa_tk.T @ temp_o
-        # print('context.shape: ', context.shape)
-
-        # Do the self attention
-        with_self_attention = context * Jf
+        with_self_attention = self.self_attention_block(Jf)
 
         x1 = self.MMF_128_to_256(with_self_attention)
         x1 = self.MMF_relu(x1)
