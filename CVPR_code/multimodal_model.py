@@ -12,6 +12,52 @@ from torch.nn import functional as F
 import numpy as np
 import sys
 
+
+class SelfAttention(nn.Module):
+    def __init__(self, d_in, d_out_kq, d_out_v):
+        super().__init__()
+        self.d_out_kq = d_out_kq
+        self.W_query = nn.Parameter(torch.rand(d_in, d_out_kq))
+        self.W_key = nn.Parameter(torch.rand(d_in, d_out_kq))
+        self.W_value = nn.Parameter(torch.rand(d_in, d_out_v))
+
+    def forward(self, x):
+        keys = x.matmul(self.W_key)
+        queries = x.matmul(self.W_query)
+        values = x.matmul(self.W_value)
+
+        # unnormalized attention weights
+        attn_scores = queries.matmul(keys.T)
+
+        attn_weights = torch.softmax(
+            attn_scores/self.d_out_kq**0.5, dim=-1
+        )
+
+        context_vex = attn_weights.matmul(values)
+        return context_vex
+
+
+class CrossAttention(nn.Module):
+    def __init__(self, d_in, d_out_kq, d_out_v):
+        super().__init__()
+        self.d_out_kq = d_out_kq
+        self.W_query = nn.Parameter(torch.rand(d_in, d_out_kq))
+        self.W_key = nn.Parameter(torch.rand(d_in, d_out_kq))
+        self.W_value = nn.Parameter(torch.rand(d_in, d_out_v))
+
+    def forward(self, x_1, x_2):
+        queries_1 = x_1.matmul(self.W_query)
+        keys_2 = x_2.matmul(self.W_key)
+        values_2 = x_2.matmul(self.W_value)
+
+        attn_scores = queries_1.matmul(keys_2.T)
+        attn_weights = torch.softmax(
+            attn_scores/self.d_out_kq**0.5, dim=-1
+        )
+
+        context_vec = attn_weights.matmul(values_2)
+        return context_vec
+
 def decision(probability):
     return np.random.rand(1)[0] < probability
 
@@ -136,7 +182,7 @@ class EffV2MediumAndDistilbertGated(nn.Module):
         # 0.07 is the temperature parameter
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
-        self.MMF_hidden_size = 128
+        self.MMF_hidden_size = 384
 
         self.image_to_MMF_hidden_size = nn.Linear(
             1280, out_features=self.MMF_hidden_size)
@@ -149,10 +195,6 @@ class EffV2MediumAndDistilbertGated(nn.Module):
 
         self.w1 = torch.rand(self.MMF_hidden_size, 16)
         self.w1_final_batch = torch.rand(self.MMF_hidden_size, 8)
-
-        self.W_key = torch.rand(self.MMF_hidden_size, self.MMF_hidden_size)
-        self.W_key = torch.nn.Parameter(
-            torch.nn.init.xavier_uniform_(self.W_key))
 
         self.w1 = torch.nn.Parameter(
             torch.nn.init.xavier_uniform_(self.w1))
@@ -170,11 +212,33 @@ class EffV2MediumAndDistilbertGated(nn.Module):
         self.MMF_128_to_256_TSA = torch.nn.Linear(self.MMF_hidden_size, 256)
         self.MMF_256_to_128_TSA = torch.nn.Linear(256, self.MMF_hidden_size)
 
-        self.MMF_dropout_20_percent_CA = nn.Dropout(p=0.2)
-        self.MMF_dropout_20_percent_ISA = nn.Dropout(p=0.2)
-        self.MMF_dropout_20_percent_TSA = nn.Dropout(p=0.2)
+        self.MMF_dropout_25_percent = nn.Dropout(p=0.25)
 
         self.softmax = nn.Softmax(dim=1)
+
+        self.output_all_features = torch.nn.Linear(self.MMF_hidden_size*3, 4)
+
+        self.d_in, self.d_out_kq, self.d_out_v = self.MMF_hidden_size, 256, self.MMF_hidden_size
+
+        self.self_attention_1 = SelfAttention(
+            self.d_in, self.d_out_kq, self.d_out_v)
+        self.self_attention_2 = SelfAttention(
+            self.d_in, self.d_out_kq, self.d_out_v)
+
+        self.cross_attention_1 = CrossAttention(
+            self.d_in, self.d_out_kq, self.d_out_v)
+        self.cross_attention_2 = CrossAttention(
+            self.d_in, self.d_out_kq, self.d_out_v)
+        self.cross_attention_3 = CrossAttention(
+            self.d_in, self.d_out_kq, self.d_out_v)
+
+        # self.W_query = nn.Parameter(torch.rand(self.d_in, self.d_out_kq))
+        # self.W_key = nn.Parameter(torch.rand(self.d_in, self.d_out_kq))
+        # self.W_value = nn.Parameter(torch.rand(self.d_in, self.d_out_v))
+
+        # self.W_query_cross = nn.Parameter(torch.rand(self.d_in, self.d_out_kq))
+        # self.W_key_cross = nn.Parameter(torch.rand(self.d_in, self.d_out_kq))
+        # self.W_value_cross = nn.Parameter(torch.rand(self.d_in, self.d_out_v))
 
         self.text_to_output = nn.Linear(self.MMF_hidden_size, out_features=4)
         self.image_to_output = nn.Linear(self.MMF_hidden_size, out_features=4)
@@ -312,54 +376,35 @@ class EffV2MediumAndDistilbertGated(nn.Module):
             else:
                 print("    Train: using both\n")
 
-    def self_attention_block(self, input_features):
+    def self_attention_block(self, x):
+        keys = x.matmul(self.W_key)
+        queries = x.matmul(self.W_query)
+        values = x.matmul(self.W_value)
 
-        temp_o = self.W_grande_1(torch.squeeze(input_features, 1))
-        # print('temp_o.shape: ', temp_o.shape)
-        utk = torch.tanh(temp_o)
-        # print('utk.shape: ', utk.shape)
+        # unnormalized attention weights
+        attn_scores = queries.matmul(keys.T)
 
-        if utk.shape[0] != 16:
-            softmax_input = utk @ self.w1_final_batch
-        else:
-            softmax_input = utk @ self.w1
+        attn_weights = torch.softmax(
+            attn_scores/self.d_out_kq**0.5, dim=-1
+        )
 
-        # print('softmax_input.shape: ', softmax_input.shape)
-        alfa_tk = self.softmax(softmax_input)
-        # print('alfa_tk.shape: ', alfa_tk.shape)
-        context = alfa_tk.T @ temp_o
-        # print('context.shape: ', context.shape)
+        context_vec = attn_weights.matmul(values)
+        print("output shape of self attention:", context_vec.shape)
+        return context_vec
 
-        # Do the self attention
-        with_self_attention = context * input_features
+    def cross_attention_block(self, x_1, x_2):
+        queries_1 = x_1.matmul(self.W_query_cross)
+        keys_2 = x_2.matmul(self.W_key_cross)
+        values_2 = x_2.matmul(self.W_value_cross)
 
-        return with_self_attention
+        attn_scores = queries_1.matmul(keys_2.T)
+        attn_weights = torch.softmax(
+            attn_scores/self.d_out_kq**0.5, dim=-1
+        )
 
-    def cross_attention_block(self, input_1, input_2):
-        # print("calling cross attention block")
-
-        temp_o = self.W_grande_1(torch.squeeze(input_1, 1))
-        # print('temp_o.shape: ', temp_o.shape)
-        utk = torch.tanh(temp_o)
-        # print('utk.shape: ', utk.shape)
-
-        values_2 = input_2 @ self.W_key
-
-        if utk.shape[0] != 16:
-            softmax_input = utk @ self.w1_final_batch
-        else:
-            softmax_input = utk @ self.w1
-
-        # print('softmax_input.shape: ', softmax_input.shape)
-        alfa_tk = self.softmax(softmax_input)
-        # print('alfa_tk.shape: ', alfa_tk.shape)
-        context = alfa_tk.T @ temp_o
-        # print('context.shape: ', context.shape)
-
-        # Do the self attention
-        with_self_attention = context * values_2
-
-        return with_self_attention
+        context_vec = attn_weights.matmul(values_2)
+        print("output shape of cross attention:", context_vec.shape)
+        return context_vec
 
 
 
@@ -542,18 +587,18 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
             original_image_features.norm(dim=1, keepdim=True)
 
         # Uni modal outputs
-        t1 = self.MMF_dropout_50_percent(original_text_features)
-        i1 = self.MMF_dropout_50_percent(original_image_features)
+        # t1 = self.MMF_dropout_50_percent(original_text_features)
+        # i1 = self.MMF_dropout_50_percent(original_image_features)
 
-        t2 = self.text_to_128(t1)
-        i2 = self.image_to_128(i1)
+        # t2 = self.text_to_128(t1)
+        # i2 = self.image_to_128(i1)
 
-        t3 = self.MMF_relu(t2)
-        i3 = self.MMF_relu(i2)
+        # t3 = self.MMF_relu(t2)
+        # i3 = self.MMF_relu(i2)
 
         # Shape: BS, 4 (classes)
-        text_out = self.text_to_output(t3)
-        image_out = self.image_to_output(i3)
+        # text_out = self.text_to_output(t3)
+        # image_out = self.image_to_output(i3)
 
         # Starting MMF output
         text_after_MMF_hidden_size = self.text_to_MMF_hidden_size(
@@ -566,49 +611,67 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
 
         # Jf = (text_features_after_relu + image_features_after_relu) / 2
 
-        image_self_attention = self.self_attention_block(
+        image_self_attention = self.self_attention_1(
             image_features_after_relu)
-        text_self_attention = self.self_attention_block(
+        text_self_attention = self.self_attention_2(
             text_features_after_relu)
-
-        cross_attention = self.cross_attention_block(
+        cross_attention = self.cross_attention_1(
             text_features_after_relu, image_features_after_relu)
 
-        x1_CA = self.MMF_128_to_256_CA(cross_attention)
-        x1_CA = self.MMF_relu(x1_CA)
-        x2_CA = self.MMF_256_to_128_CA(x1_CA)
-        x2_CA = self.MMF_relu(x2_CA)
-        x3_CA = self.MMF_dropout_20_percent_CA(x2_CA)
-        final_output_CA = self.MMF_output_CA(x3_CA)
+        print("Doing reverse cross attention!")
 
-        x1_ISA = self.MMF_128_to_256_ISA(image_self_attention)
-        x1_ISA = self.MMF_relu(x1_ISA)
-        x2_ISA = self.MMF_256_to_128_ISA(x1_ISA)
-        x2_ISA = self.MMF_relu(x2_ISA)
-        x3_ISA = self.MMF_dropout_20_percent_ISA(x2_ISA)
-        final_output_ISA = self.MMF_output_ISA(x3_ISA)
+        cross_attention_image_all = 1.0 / self.cross_attention_2(
+            cross_attention, image_self_attention)
+        cross_attention_text_all = 1.0 / self.cross_attention_3(
+            cross_attention, text_self_attention)
 
-        x1_TSA = self.MMF_128_to_256_TSA(text_self_attention)
-        x1_TSA = self.MMF_relu(x1_TSA)
-        x2_TSA = self.MMF_256_to_128_TSA(x1_TSA)
-        x2_TSA = self.MMF_relu(x2_TSA)
-        x3_TSA = self.MMF_dropout_20_percent_TSA(x2_TSA)
-        final_output_TSA = self.MMF_output_TSA(x3_TSA)
+        concat_features = torch.cat(
+            (cross_attention_image_all,
+             cross_attention_text_all,
+             cross_attention), dim=1)
+
+        print("shape of concat_features:", concat_features.shape)
+
+        x2 = self.MMF_relu(concat_features)
+        x3 = self.MMF_dropout_25_percent(x2)
+        x4 = self.output_all_features(x3)
+        output = self.MMF_relu(x4)
+
+        # x1_CA = self.MMF_128_to_256_CA(cross_attention)
+        # x1_CA = self.MMF_relu(x1_CA)
+        # x2_CA = self.MMF_256_to_128_CA(x1_CA)
+        # x2_CA = self.MMF_relu(x2_CA)
+        # x3_CA = self.MMF_dropout_20_percent_CA(x2_CA)
+        # final_output_CA = self.MMF_output_CA(x3_CA)
+
+        # x1_ISA = self.MMF_128_to_256_ISA(image_self_attention)
+        # x1_ISA = self.MMF_relu(x1_ISA)
+        # x2_ISA = self.MMF_256_to_128_ISA(x1_ISA)
+        # x2_ISA = self.MMF_relu(x2_ISA)
+        # x3_ISA = self.MMF_dropout_20_percent_ISA(x2_ISA)
+        # final_output_ISA = self.MMF_output_ISA(x3_ISA)
+
+        # x1_TSA = self.MMF_128_to_256_TSA(text_self_attention)
+        # x1_TSA = self.MMF_relu(x1_TSA)
+        # x2_TSA = self.MMF_256_to_128_TSA(x1_TSA)
+        # x2_TSA = self.MMF_relu(x2_TSA)
+        # x3_TSA = self.MMF_dropout_20_percent_TSA(x2_TSA)
+        # final_output_TSA = self.MMF_output_TSA(x3_TSA)
 
         # output_softmax = self.softmax(final_output)
 
         # print("self.MMF_output_weights:", self.MMF_output_weights)
 
-        normalized_weights = torch.softmax(self.MMF_output_weights, dim=0)
+        # normalized_weights = torch.softmax(self.MMF_output_weights, dim=0)
 
-        print("normalized_weights:", normalized_weights)
+        # print("normalized_weights:", normalized_weights)
 
         # # print("torch.sum(normalized_weights)", torch.sum(normalized_weights))
 
-        weighted_avg = ((final_output_CA * normalized_weights[0]) +
-                        (final_output_ISA * normalized_weights[1]) +
-                        (final_output_TSA * normalized_weights[2]))
+        # weighted_avg = ((final_output_CA * normalized_weights[0]) +
+        #                 (final_output_ISA * normalized_weights[1]) +
+        #                 (final_output_TSA * normalized_weights[2]))
 
         # print("weighted_avg shape", weighted_avg.shape)
 
-        return weighted_avg
+        return output

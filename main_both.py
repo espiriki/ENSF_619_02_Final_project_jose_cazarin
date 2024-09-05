@@ -122,7 +122,7 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
             train_optimizer.step()
             train_optimizer.zero_grad()
 
-        print("Batch {} on epoch {}".format(batch_idx, epoch_num))
+        print("Batch {}/{} on epoch {}".format(batch_idx, n_batches, epoch_num))
 
         cpu_loss = loss.cpu()
         cpu_loss = cpu_loss.detach()
