@@ -41,14 +41,18 @@ class CrossAttention(nn.Module):
     def __init__(self, d_in, d_out_kq, d_out_v):
         super().__init__()
         self.d_out_kq = d_out_kq
-        self.W_query = nn.Parameter(torch.rand(d_in, d_out_kq))
-        self.W_key = nn.Parameter(torch.rand(d_in, d_out_kq))
-        self.W_value = nn.Parameter(torch.rand(d_in, d_out_v))
+        # self.W_query = nn.Parameter(torch.rand(d_in, d_out_kq))
+        # self.W_key = nn.Parameter(torch.rand(d_in, d_out_kq))
+        # self.W_value = nn.Parameter(torch.rand(d_in, d_out_v))
+        self.W_query = nn.Linear(d_in, d_out_kq)
+        self.W_key = nn.Linear(d_in, d_out_kq)
+        self.W_value = nn.Linear(d_in, d_out_v)
 
     def forward(self, x_1, x_2):
-        queries_1 = x_1.matmul(self.W_query)
-        keys_2 = x_2.matmul(self.W_key)
-        values_2 = x_2.matmul(self.W_value)
+        print("calling cross attention")
+        queries_1 = self.W_query(x_1)
+        keys_2 = self.W_key(x_2)
+        values_2 = self.W_value(x_2)
 
         attn_scores = queries_1.matmul(keys_2.T)
         attn_weights = torch.softmax(
@@ -606,36 +610,63 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
         image_after_MMF_hidden_size = self.image_to_MMF_hidden_size(
             original_image_features)
 
-        text_features_after_relu = self.MMF_relu(text_after_MMF_hidden_size)
-        image_features_after_relu = self.MMF_relu(image_after_MMF_hidden_size)
+        # text_features_after_relu = self.MMF_relu(text_after_MMF_hidden_size)
+        # image_features_after_relu = self.MMF_relu(image_after_MMF_hidden_size)
 
         # Jf = (text_features_after_relu + image_features_after_relu) / 2
 
         image_self_attention = self.self_attention_1(
-            image_features_after_relu)
+            image_after_MMF_hidden_size)
         text_self_attention = self.self_attention_2(
-            text_features_after_relu)
+            text_after_MMF_hidden_size)
         cross_attention = self.cross_attention_1(
-            text_features_after_relu, image_features_after_relu)
+            text_after_MMF_hidden_size, image_self_attention)
 
-        print("Doing reverse cross attention!")
+        cross_attention = cross_attention / \
+            cross_attention.norm(dim=1, keepdim=True)
 
-        cross_attention_image_all = 1.0 / self.cross_attention_2(
-            cross_attention, image_self_attention)
-        cross_attention_text_all = 1.0 / self.cross_attention_3(
-            cross_attention, text_self_attention)
+        image_self_attention = image_self_attention / \
+            image_self_attention.norm(dim=1, keepdim=True)
+
+        text_self_attention = text_self_attention / \
+            text_self_attention.norm(dim=1, keepdim=True)
+
+        # print("Doing reverse cross attention!")
+
+        # cross_attention_image_all = self.cross_attention_2(
+        #     cross_attention, image_self_attention)
+        # cross_attention_text_all = self.cross_attention_3(
+        #     cross_attention, text_self_attention)
+
+        # cross_attention_image_all = cross_attention_image_all / \
+        #     cross_attention_image_all.norm(dim=1, keepdim=True)
+        # cross_attention_text_all = cross_attention_text_all / \
+        #     cross_attention_text_all.norm(dim=1, keepdim=True)
+
+        # print("max cross attention image BEFORE:",
+        #       torch.max(cross_attention_image_all, dim=1))
+        # print("max cross attention text BEFORE:",
+        #       torch.max(cross_attention_text_all, dim=1))
+
+        # cross_attention_image_all = 1.0 / cross_attention_image_all
+        # cross_attention_text_all = 1.0 / cross_attention_text_all
+
+        # print("max cross attention image AFTER:",
+        #       torch.max(cross_attention_image_all, dim=1))
+        # print("max cross attention text AFTER:",
+        #       torch.max(cross_attention_text_all, dim=1))
 
         concat_features = torch.cat(
-            (cross_attention_image_all,
-             cross_attention_text_all,
+            (image_self_attention,
+             text_self_attention,
              cross_attention), dim=1)
 
-        print("shape of concat_features:", concat_features.shape)
+        # print("shape of concat_features:", concat_features.shape)
 
-        x2 = self.MMF_relu(concat_features)
-        x3 = self.MMF_dropout_25_percent(x2)
-        x4 = self.output_all_features(x3)
-        output = self.MMF_relu(x4)
+        # x2 = self.MMF_relu(concat_features)
+        x3 = self.MMF_dropout_25_percent(concat_features)
+        output = self.output_all_features(x3)
+        # output = self.MMF_relu(x4)
 
         # x1_CA = self.MMF_128_to_256_CA(cross_attention)
         # x1_CA = self.MMF_relu(x1_CA)
