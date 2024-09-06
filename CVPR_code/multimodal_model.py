@@ -17,16 +17,18 @@ class SelfAttention(nn.Module):
     def __init__(self, d_in, d_out_kq, d_out_v):
         super().__init__()
         self.d_out_kq = d_out_kq
-        self.W_query = nn.Parameter(torch.rand(d_in, d_out_kq))
-        self.W_key = nn.Parameter(torch.rand(d_in, d_out_kq))
-        self.W_value = nn.Parameter(torch.rand(d_in, d_out_v))
+        self.W_query = nn.Linear(d_in, d_out_kq)
+        self.W_key = nn.Linear(d_in, d_out_kq)
+        self.W_value = nn.Linear(d_in, d_out_v)
 
     def forward(self, x):
-        keys = x.matmul(self.W_key)
-        queries = x.matmul(self.W_query)
-        values = x.matmul(self.W_value)
+        print("calling self attention")
+        print("weights of W_key on self:", self.W_key.weight[:10])
 
-        # unnormalized attention weights
+        keys = self.W_key(x)
+        queries = self.W_query(x)
+        values = self.W_value(x)
+
         attn_scores = queries.matmul(keys.T)
 
         attn_weights = torch.softmax(
@@ -38,18 +40,17 @@ class SelfAttention(nn.Module):
 
 
 class CrossAttention(nn.Module):
-    def __init__(self, d_in, d_out_kq, d_out_v):
+    def __init__(self, d_in_x1, d_in_x2, d_out_kq, d_out_v):
         super().__init__()
         self.d_out_kq = d_out_kq
-        # self.W_query = nn.Parameter(torch.rand(d_in, d_out_kq))
-        # self.W_key = nn.Parameter(torch.rand(d_in, d_out_kq))
-        # self.W_value = nn.Parameter(torch.rand(d_in, d_out_v))
-        self.W_query = nn.Linear(d_in, d_out_kq)
-        self.W_key = nn.Linear(d_in, d_out_kq)
-        self.W_value = nn.Linear(d_in, d_out_v)
+        self.W_query = nn.Linear(d_in_x1, d_out_kq)
+        self.W_key = nn.Linear(d_in_x2, d_out_kq)
+        self.W_value = nn.Linear(d_in_x2, d_out_v)
 
     def forward(self, x_1, x_2):
-        print("calling cross attention")
+        # print("calling cross attention")
+        # print("weights of W_key on cross:", self.W_key.weight[:10])
+
         queries_1 = self.W_query(x_1)
         keys_2 = self.W_key(x_2)
         values_2 = self.W_value(x_2)
@@ -220,21 +221,22 @@ class EffV2MediumAndDistilbertGated(nn.Module):
 
         self.softmax = nn.Softmax(dim=1)
 
-        self.output_all_features = torch.nn.Linear(self.MMF_hidden_size*3, 4)
+        self.output_all_features = torch.nn.Linear(256*3, 4)
 
-        self.d_in, self.d_out_kq, self.d_out_v = self.MMF_hidden_size, 256, self.MMF_hidden_size
+        self.d_in, self.d_out_kq, self.d_out_v = \
+            self.MMF_hidden_size, 256, self.MMF_hidden_size
 
-        self.self_attention_1 = SelfAttention(
-            self.d_in, self.d_out_kq, self.d_out_v)
-        self.self_attention_2 = SelfAttention(
-            self.d_in, self.d_out_kq, self.d_out_v)
+        self.self_attention_image = SelfAttention(
+            1280, 512, 256)
+        self.self_attention_text = SelfAttention(
+            768, 512, 256)
 
         self.cross_attention_1 = CrossAttention(
-            self.d_in, self.d_out_kq, self.d_out_v)
-        self.cross_attention_2 = CrossAttention(
-            self.d_in, self.d_out_kq, self.d_out_v)
-        self.cross_attention_3 = CrossAttention(
-            self.d_in, self.d_out_kq, self.d_out_v)
+            768, 1280, 512, 256)
+        # self.cross_attention_2 = CrossAttention(
+        #     self.d_in, self.d_out_kq, self.d_out_v)
+        # self.cross_attention_3 = CrossAttention(
+        #     self.d_in, self.d_out_kq, self.d_out_v)
 
         # self.W_query = nn.Parameter(torch.rand(self.d_in, self.d_out_kq))
         # self.W_key = nn.Parameter(torch.rand(self.d_in, self.d_out_kq))
@@ -582,127 +584,31 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
         )
         hidden_state = text_output[0]
 
+        # Get the image and text features
         original_text_features = hidden_state[:, 0]
         original_image_features = self.image_model(self._images)
 
+        # Normalize
         original_text_features = original_text_features / \
             original_text_features.norm(dim=1, keepdim=True)
         original_image_features = original_image_features / \
             original_image_features.norm(dim=1, keepdim=True)
 
-        # Uni modal outputs
-        # t1 = self.MMF_dropout_50_percent(original_text_features)
-        # i1 = self.MMF_dropout_50_percent(original_image_features)
-
-        # t2 = self.text_to_128(t1)
-        # i2 = self.image_to_128(i1)
-
-        # t3 = self.MMF_relu(t2)
-        # i3 = self.MMF_relu(i2)
-
-        # Shape: BS, 4 (classes)
-        # text_out = self.text_to_output(t3)
-        # image_out = self.image_to_output(i3)
-
-        # Starting MMF output
-        text_after_MMF_hidden_size = self.text_to_MMF_hidden_size(
-            original_text_features)
-        image_after_MMF_hidden_size = self.image_to_MMF_hidden_size(
+        # Do attentions
+        image_self_attention = self.self_attention_image(
             original_image_features)
-
-        # text_features_after_relu = self.MMF_relu(text_after_MMF_hidden_size)
-        # image_features_after_relu = self.MMF_relu(image_after_MMF_hidden_size)
-
-        # Jf = (text_features_after_relu + image_features_after_relu) / 2
-
-        image_self_attention = self.self_attention_1(
-            image_after_MMF_hidden_size)
-        text_self_attention = self.self_attention_2(
-            text_after_MMF_hidden_size)
+        text_self_attention = self.self_attention_text(
+            original_text_features)
         cross_attention = self.cross_attention_1(
-            text_after_MMF_hidden_size, image_self_attention)
+            original_text_features, original_image_features)
 
-        cross_attention = cross_attention / \
-            cross_attention.norm(dim=1, keepdim=True)
-
-        image_self_attention = image_self_attention / \
-            image_self_attention.norm(dim=1, keepdim=True)
-
-        text_self_attention = text_self_attention / \
-            text_self_attention.norm(dim=1, keepdim=True)
-
-        # print("Doing reverse cross attention!")
-
-        # cross_attention_image_all = self.cross_attention_2(
-        #     cross_attention, image_self_attention)
-        # cross_attention_text_all = self.cross_attention_3(
-        #     cross_attention, text_self_attention)
-
-        # cross_attention_image_all = cross_attention_image_all / \
-        #     cross_attention_image_all.norm(dim=1, keepdim=True)
-        # cross_attention_text_all = cross_attention_text_all / \
-        #     cross_attention_text_all.norm(dim=1, keepdim=True)
-
-        # print("max cross attention image BEFORE:",
-        #       torch.max(cross_attention_image_all, dim=1))
-        # print("max cross attention text BEFORE:",
-        #       torch.max(cross_attention_text_all, dim=1))
-
-        # cross_attention_image_all = 1.0 / cross_attention_image_all
-        # cross_attention_text_all = 1.0 / cross_attention_text_all
-
-        # print("max cross attention image AFTER:",
-        #       torch.max(cross_attention_image_all, dim=1))
-        # print("max cross attention text AFTER:",
-        #       torch.max(cross_attention_text_all, dim=1))
-
+        # Concat attn features
         concat_features = torch.cat(
             (image_self_attention,
              text_self_attention,
              cross_attention), dim=1)
 
-        # print("shape of concat_features:", concat_features.shape)
-
-        # x2 = self.MMF_relu(concat_features)
+        # Dropout and final layer to output
         x3 = self.MMF_dropout_25_percent(concat_features)
         output = self.output_all_features(x3)
-        # output = self.MMF_relu(x4)
-
-        # x1_CA = self.MMF_128_to_256_CA(cross_attention)
-        # x1_CA = self.MMF_relu(x1_CA)
-        # x2_CA = self.MMF_256_to_128_CA(x1_CA)
-        # x2_CA = self.MMF_relu(x2_CA)
-        # x3_CA = self.MMF_dropout_20_percent_CA(x2_CA)
-        # final_output_CA = self.MMF_output_CA(x3_CA)
-
-        # x1_ISA = self.MMF_128_to_256_ISA(image_self_attention)
-        # x1_ISA = self.MMF_relu(x1_ISA)
-        # x2_ISA = self.MMF_256_to_128_ISA(x1_ISA)
-        # x2_ISA = self.MMF_relu(x2_ISA)
-        # x3_ISA = self.MMF_dropout_20_percent_ISA(x2_ISA)
-        # final_output_ISA = self.MMF_output_ISA(x3_ISA)
-
-        # x1_TSA = self.MMF_128_to_256_TSA(text_self_attention)
-        # x1_TSA = self.MMF_relu(x1_TSA)
-        # x2_TSA = self.MMF_256_to_128_TSA(x1_TSA)
-        # x2_TSA = self.MMF_relu(x2_TSA)
-        # x3_TSA = self.MMF_dropout_20_percent_TSA(x2_TSA)
-        # final_output_TSA = self.MMF_output_TSA(x3_TSA)
-
-        # output_softmax = self.softmax(final_output)
-
-        # print("self.MMF_output_weights:", self.MMF_output_weights)
-
-        # normalized_weights = torch.softmax(self.MMF_output_weights, dim=0)
-
-        # print("normalized_weights:", normalized_weights)
-
-        # # print("torch.sum(normalized_weights)", torch.sum(normalized_weights))
-
-        # weighted_avg = ((final_output_CA * normalized_weights[0]) +
-        #                 (final_output_ISA * normalized_weights[1]) +
-        #                 (final_output_TSA * normalized_weights[2]))
-
-        # print("weighted_avg shape", weighted_avg.shape)
-
         return output

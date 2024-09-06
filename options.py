@@ -60,5 +60,8 @@ def args_parser():
     parser.add_argument('--label_smoothing', type=float, default=0.0,
                         help='Fraction to use Label Smoothing')
 
+    parser.add_argument('--name', type=str,
+                        help='Run description')
+
     args = parser.parse_args()
     return args
