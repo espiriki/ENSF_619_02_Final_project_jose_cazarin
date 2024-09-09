@@ -22,8 +22,8 @@ class SelfAttention(nn.Module):
         self.W_value = nn.Linear(d_in, d_out_v)
 
     def forward(self, x):
-        print("calling self attention")
-        print("weights of W_key on self:", self.W_key.weight[:10])
+        # print("calling self attention")
+        # print("weights of W_key on self:", self.W_key.weight[:10])
 
         keys = self.W_key(x)
         queries = self.W_query(x)
@@ -60,7 +60,12 @@ class CrossAttention(nn.Module):
             attn_scores/self.d_out_kq**0.5, dim=-1
         )
 
-        context_vec = attn_weights.matmul(values_2)
+        assert (attn_weights.shape[0] == attn_weights.shape[1])
+
+        dimension = attn_weights.shape[0]
+        test = (1.0-attn_weights)/(dimension-1)
+
+        context_vec = test.matmul(values_2)
         return context_vec
 
 def decision(probability):
@@ -195,56 +200,25 @@ class EffV2MediumAndDistilbertGated(nn.Module):
             in_features=self.text_model.config.hidden_size, out_features=self.MMF_hidden_size)
         self.MMF_relu = nn.ReLU()
 
-        self.W_grande_1 = torch.nn.Linear(
-            self.MMF_hidden_size, self.MMF_hidden_size)
-
-        self.w1 = torch.rand(self.MMF_hidden_size, 16)
-        self.w1_final_batch = torch.rand(self.MMF_hidden_size, 8)
-
-        self.w1 = torch.nn.Parameter(
-            torch.nn.init.xavier_uniform_(self.w1))
-        self.w1_final_batch = torch.nn.Parameter(
-            torch.nn.init.xavier_uniform_(self.w1_final_batch))
-
-        self.MMF_output_CA = torch.nn.Linear(self.MMF_hidden_size, 4)
-        self.MMF_output_ISA = torch.nn.Linear(self.MMF_hidden_size, 4)
-        self.MMF_output_TSA = torch.nn.Linear(self.MMF_hidden_size, 4)
-
-        self.MMF_128_to_256_CA = torch.nn.Linear(self.MMF_hidden_size, 256)
-        self.MMF_256_to_128_CA = torch.nn.Linear(256, self.MMF_hidden_size)
-        self.MMF_128_to_256_ISA = torch.nn.Linear(self.MMF_hidden_size, 256)
-        self.MMF_256_to_128_ISA = torch.nn.Linear(256, self.MMF_hidden_size)
-        self.MMF_128_to_256_TSA = torch.nn.Linear(self.MMF_hidden_size, 256)
-        self.MMF_256_to_128_TSA = torch.nn.Linear(256, self.MMF_hidden_size)
-
         self.MMF_dropout_25_percent = nn.Dropout(p=0.25)
 
         self.softmax = nn.Softmax(dim=1)
 
-        self.output_all_features = torch.nn.Linear(256*3, 4)
+        self.output_all_features = torch.nn.Linear(640, 4)
 
         self.d_in, self.d_out_kq, self.d_out_v = \
             self.MMF_hidden_size, 256, self.MMF_hidden_size
 
         self.self_attention_image = SelfAttention(
-            1280, 512, 256)
+            256, 32, 64)
         self.self_attention_text = SelfAttention(
-            768, 512, 256)
+            256, 32, 64)
 
         self.cross_attention_1 = CrossAttention(
-            768, 1280, 512, 256)
-        # self.cross_attention_2 = CrossAttention(
-        #     self.d_in, self.d_out_kq, self.d_out_v)
-        # self.cross_attention_3 = CrossAttention(
-        #     self.d_in, self.d_out_kq, self.d_out_v)
+            256, 256, 32, 64)
 
-        # self.W_query = nn.Parameter(torch.rand(self.d_in, self.d_out_kq))
-        # self.W_key = nn.Parameter(torch.rand(self.d_in, self.d_out_kq))
-        # self.W_value = nn.Parameter(torch.rand(self.d_in, self.d_out_v))
-
-        # self.W_query_cross = nn.Parameter(torch.rand(self.d_in, self.d_out_kq))
-        # self.W_key_cross = nn.Parameter(torch.rand(self.d_in, self.d_out_kq))
-        # self.W_value_cross = nn.Parameter(torch.rand(self.d_in, self.d_out_v))
+        self.cross_attention_2 = CrossAttention(
+            256, 256, 32, 64)
 
         self.text_to_output = nn.Linear(self.MMF_hidden_size, out_features=4)
         self.image_to_output = nn.Linear(self.MMF_hidden_size, out_features=4)
@@ -594,19 +568,31 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
         original_image_features = original_image_features / \
             original_image_features.norm(dim=1, keepdim=True)
 
+        image_hidden_size = self.image_to_hidden_size(original_image_features)
+        text_hidden_size = self.text_to_hidden_size(original_text_features)
+
         # Do attentions
         image_self_attention = self.self_attention_image(
-            original_image_features)
+            image_hidden_size)
         text_self_attention = self.self_attention_text(
-            original_text_features)
-        cross_attention = self.cross_attention_1(
-            original_text_features, original_image_features)
+            text_hidden_size)
+        complementary_cross_attention_T_I = self.cross_attention_1(
+            text_hidden_size, image_hidden_size)
+        complementary_cross_attention_I_T = self.cross_attention_2(
+            image_hidden_size, text_hidden_size)
+
+        #
+        input_1 = image_self_attention - complementary_cross_attention_I_T
+
+        input_2 = text_self_attention - complementary_cross_attention_T_I
 
         # Concat attn features
         concat_features = torch.cat(
-            (image_self_attention,
-             text_self_attention,
-             cross_attention), dim=1)
+            (input_1,  # 64
+             input_2,  # 64
+             image_hidden_size,  # 256
+             text_hidden_size,  # 256
+             ), dim=1)
 
         # Dropout and final layer to output
         x3 = self.MMF_dropout_25_percent(concat_features)
