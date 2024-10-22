@@ -610,15 +610,17 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
         # FC layer to output
         concat_features = torch.cat(
             (
-                # complementary_cross_attention_T_I,
-                # complementary_cross_attention_I_T
-                original_image_features,
-                original_text_features
+                complementary_cross_attention_T_I,
+                complementary_cross_attention_I_T,
+                # original_image_features,
+                # original_text_features
             ), dim=1)
 
         after_dropout = self.drop(concat_features)
 
-        # output = self.final(after_dropout)
-        output = self.final_features_only(after_dropout)
+        output = self.final(after_dropout)
+        # output = self.final_features_only(after_dropout)
+
+        output = self.relu(output)
 
         return output
