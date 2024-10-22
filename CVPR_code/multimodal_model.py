@@ -1,69 +1,79 @@
 import torch
-import torch.nn as nn
 from transformers import DistilBertModel, DistilBertConfig, BartConfig, BartForSequenceClassification
 from transformers import BartModel
 from transformers import BertModel, BertConfig
 from torchvision.models import *
 from transformers import DistilBertTokenizer, BartTokenizer
 from transformers import BertTokenizer
-from random import randint
-import random
-from torch.nn import functional as F
 import numpy as np
 import sys
 
 
-class SelfAttention(nn.Module):
-    def __init__(self, d_in, d_out_kq, d_out_v):
-        super().__init__()
+class SelfAttention(torch.nn.Module):
+    def __init__(self, d_in, d_out_kq, d_out_v, name):
+        super(SelfAttention, self).__init__()
         self.d_out_kq = d_out_kq
-        self.W_query = nn.Linear(d_in, d_out_kq)
-        self.W_key = nn.Linear(d_in, d_out_kq)
-        self.W_value = nn.Linear(d_in, d_out_v)
-        self.activation_fx = nn.Tanh()
+        self.W_query = torch.nn.Linear(d_in, d_out_kq)
+        self.W_key = torch.nn.Linear(d_in, d_out_kq)
+        self.W_value = torch.nn.Linear(d_in, d_out_v)
+        self.name = name
+        # Normalization layer after attention
+        self.norm = torch.nn.LayerNorm(d_out_v)
+        self.relu = torch.nn.ReLU()
 
     def forward(self, x):
         keys = self.W_key(x)
         queries = self.W_query(x)
         values = self.W_value(x)
 
-        attn_scores = self.activation_fx(queries.matmul(keys.T))
+        attn_scores = torch.matmul(queries, keys.transpose(-1, -2))
 
         attn_weights = torch.softmax(
             attn_scores/self.d_out_kq**0.5, dim=-1
         )
 
-        context_vex = attn_weights.matmul(values)
-        return context_vex
+        context_vec = attn_weights.matmul(values)
+
+        output = context_vec
+        output = self.norm(output)
+        output = self.relu(output)
+
+        return output
 
 
-class CrossAttention(nn.Module):
+class ReverseCrossAttention(torch.nn.Module):
     def __init__(self, d_in_x1, d_in_x2, d_out_kq, d_out_v):
         super().__init__()
         self.d_out_kq = d_out_kq
-        self.W_query = nn.Linear(d_in_x1, d_out_kq)
-        self.W_key = nn.Linear(d_in_x2, d_out_kq)
-        self.W_value = nn.Linear(d_in_x2, d_out_v)
-        self.activation_fx = nn.Tanh()
+        self.W_query = torch.nn.Linear(d_in_x1, d_out_kq)
+        self.W_key = torch.nn.Linear(d_in_x2, d_out_kq)
+        self.W_value = torch.nn.Linear(d_in_x2, d_out_v)
+        self.norm = torch.nn.LayerNorm(d_out_v)
+        self.relu = torch.nn.ReLU()
 
     def forward(self, x_1, x_2):
         queries_1 = self.W_query(x_1)
         keys_2 = self.W_key(x_2)
         values_2 = self.W_value(x_2)
 
-        attn_scores = self.activation_fx(queries_1.matmul(keys_2.T))
+        attn_scores = torch.matmul(queries_1, keys_2.transpose(-1, -2))
 
         attn_weights = torch.softmax(
             attn_scores/self.d_out_kq**0.5, dim=-1
         )
 
-        assert (attn_weights.shape[0] == attn_weights.shape[1])
+        assert (attn_weights.shape[1] == attn_weights.shape[2])
 
-        dimension = attn_weights.shape[0]
+        dimension = attn_weights.shape[1]
         reversed_weights = (1.0-attn_weights)/(dimension-1)
 
         context_vec = reversed_weights.matmul(values_2)
-        return context_vec
+
+        output = context_vec
+        output = self.norm(output)
+        output = self.relu(output)
+
+        return output
 
 def decision(probability):
     return np.random.rand(1)[0] < probability
@@ -75,7 +85,8 @@ def eff_net_v2():
     for param in model.parameters():
         param.requires_grad = False
 
-    model.classifier = nn.Sequential(*[model.classifier[i] for i in range(1)])
+    model.classifier = torch.nn.Sequential(
+        *[model.classifier[i] for i in range(1)])
 
     return model
 
@@ -107,7 +118,7 @@ def bert():
     return model
 
 
-class EffV2MediumAndDistilbertGated(nn.Module):
+class EffV2MediumAndDistilbertGated(torch.nn.Module):
 
     def __init__(self,
                  n_classes,
@@ -133,104 +144,102 @@ class EffV2MediumAndDistilbertGated(nn.Module):
             
         self.image_model = eff_net_v2()
 
-        self.drop = nn.Dropout(p=drop_ratio)
+        self.drop = torch.nn.Dropout(p=drop_ratio)
         self.fc_layer_neurons = num_neurons_fc
 
-        self.image_dropout = nn.Dropout2d(p=1.0)
-        self.text_dropout = nn.Dropout1d(p=1.0)
+        self.image_dropout = torch.nn.Dropout2d(p=1.0)
+        self.text_dropout = torch.nn.Dropout1d(p=1.0)
         self.image_or_text_dropout_chance = image_or_text_dropout_chance
         self.img_dropout_prob = img_prob_dropout
 
         # 1280 from image + 768 from text
         self.image_to_hidden_size = \
-            nn.Linear(1280,
+            torch.nn.Linear(1280,
                       out_features=self.fc_layer_neurons)
 
         print("Text model hidden size:",self.text_model.config.hidden_size)
         self.text_to_hidden_size = \
-            nn.Linear(in_features=self.text_model.config.hidden_size,
+            torch.nn.Linear(in_features=self.text_model.config.hidden_size,
                       out_features=self.fc_layer_neurons)
 
         self.concat_layer = \
-            nn.Linear(self.fc_layer_neurons*2, self.fc_layer_neurons)
+            torch.nn.Linear(self.fc_layer_neurons*2, self.fc_layer_neurons)
 
         # FC layer to classes
         self.fc_layer = \
-            nn.Linear(self.fc_layer_neurons, n_classes)
+            torch.nn.Linear(self.fc_layer_neurons, n_classes)
 
         # Layers for gated output
         self.gated_output_hidden_size = 256
-        self.hyper_tang_layer = nn.Tanh()
-        self.softmax_layer = nn.Softmax(dim=1)
+        self.hyper_tang_layer = torch.nn.Tanh()
+        self.softmax_layer = torch.nn.Softmax(dim=1)
 
         self.image_features_hidden_layer = \
-            nn.Linear(1280,
+            torch.nn.Linear(1280,
                       self.gated_output_hidden_size)
 
         self.text_features_hidden_layer = \
-            nn.Linear(self.text_model.config.hidden_size,
+            torch.nn.Linear(self.text_model.config.hidden_size,
                       self.gated_output_hidden_size)
 
         self.z_layer = \
-            nn.Linear(self.gated_output_hidden_size * 2,
+            torch.nn.Linear(self.gated_output_hidden_size * 2,
                       self.gated_output_hidden_size)
 
         # FC layer to classes
         self.fc_layer_gated = \
-            nn.Linear(self.gated_output_hidden_size, n_classes)
+            torch.nn.Linear(self.gated_output_hidden_size, n_classes)
 
         # FC layer to classes
-        self.clip_fc_layer = nn.Linear(batch_size, n_classes)
+        self.clip_fc_layer = torch.nn.Linear(batch_size, n_classes)
         self.batch_size = batch_size
 
-        self.trans_conv = nn.ConvTranspose1d(
+        self.trans_conv = torch.nn.ConvTranspose1d(
             in_channels=8, out_channels=8, kernel_size=2, stride=2, padding=0, output_padding=0)
 
         # 0.07 is the temperature parameter
-        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
-
-        self.MMF_hidden_size = 384
-
-        self.image_to_MMF_hidden_size = nn.Linear(
-            1280, out_features=self.MMF_hidden_size)
-        self.text_to_MMF_hidden_size = nn.Linear(
-            in_features=self.text_model.config.hidden_size, out_features=self.MMF_hidden_size)
-        self.MMF_relu = nn.ReLU()
-
-        self.MMF_dropout_25_percent = nn.Dropout(p=0.25)
-
-        self.softmax = nn.Softmax(dim=1)
+        self.logit_scale = torch.nn.Parameter(
+            torch.ones([]) * np.log(1 / 0.07))
 
         self.output_all_features = torch.nn.Linear(640, 4)
 
-        self.d_in, self.d_out_kq, self.d_out_v = \
-            self.MMF_hidden_size, 256, self.MMF_hidden_size
+        self.num_patches = 16
+
+        hidden_attention_size = 128
+        output_attention_size = 96
+
+        cross_attention_hidden_size = 64
+        cross_attention_output_size = 48
+
+        input_size_txt = 768
+        input_size_img = 1280
+
+        self.txt_patch_size = int(input_size_txt / self.num_patches)
+        self.img_patch_size = int(input_size_img / self.num_patches)
+
+        print("txt patch size: ", self.txt_patch_size)
+        print("img patch size: ", self.img_patch_size)
 
         self.self_attention_image = SelfAttention(
-            1280, 64, 32)
+            self.img_patch_size, hidden_attention_size, output_attention_size, "Img block")
         self.self_attention_text = SelfAttention(
-            768, 64, 32)
+            self.txt_patch_size, hidden_attention_size, output_attention_size, "Txt block")
 
-        self.huang_image = torch.nn.Linear(32, 4)
-        self.huang_text = torch.nn.Linear(32, 4)
-        self.huang_both = torch.nn.Linear(64, 4)
-        self.average_output = nn.Parameter(torch.tensor([1.0, 1.0]))
+        self.cross_attention_1 = ReverseCrossAttention(
+            output_attention_size, output_attention_size,
+            cross_attention_hidden_size, cross_attention_output_size)
 
-        self.cross_attention_1 = CrossAttention(
-            256, 256, 32, 64)
+        self.cross_attention_2 = ReverseCrossAttention(
+            output_attention_size, output_attention_size,
+            cross_attention_hidden_size, cross_attention_output_size)
 
-        self.cross_attention_2 = CrossAttention(
-            256, 256, 32, 64)
+        self.final = torch.nn.Linear(
+            cross_attention_output_size*self.num_patches*2, n_classes)
 
-        self.text_to_output = nn.Linear(self.MMF_hidden_size, out_features=4)
-        self.image_to_output = nn.Linear(self.MMF_hidden_size, out_features=4)
-
-        self.MMF_output_weights = nn.Parameter(torch.tensor([1.0, 1.0, 1.0]))
-
-        self.text_to_128 = nn.Linear(
-            in_features=self.text_model.config.hidden_size, out_features=self.MMF_hidden_size)
-        self.image_to_128 = nn.Linear(1280, out_features=self.MMF_hidden_size)
-        self.MMF_dropout_50_percent = nn.Dropout(p=0.5)
+        self.final_features_only = torch.nn.Linear(
+            1280+768, n_classes)
+        
+        self.relu = torch.nn.ReLU()
 
 
     def forward(self,
@@ -340,7 +349,7 @@ class EffV2MediumAndDistilbertGated(nn.Module):
                 self._attention_mask = self.text_dropout(self._attention_mask)
 
             if not remove_image and not remove_text:
-                print("    Eval: using both")
+                # print("    Eval: using both")
                 pass
         # Training
         else:
@@ -356,7 +365,8 @@ class EffV2MediumAndDistilbertGated(nn.Module):
                     self._input_ids = self.text_dropout(self._input_ids)
                     self._attention_mask = self.text_dropout(self._attention_mask)
             else:
-                print("    Train: using both\n")
+                # print("    Train: using both\n")
+                pass
 
     def self_attention_block(self, x):
         keys = x.matmul(self.W_key)
@@ -547,7 +557,7 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
                 remove_image=False,
                 remove_text=False):
 
-        print("MMF forward")
+        # print("MMF forward")
 
         self._images = _images
         self._input_ids = _input_ids
@@ -564,107 +574,51 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
         original_text_features = hidden_state[:, 0]
         original_image_features = self.image_model(self._images)
 
-        # # Normalize
-        # original_text_features = original_text_features / \
-        #     original_text_features.norm(dim=1, keepdim=True)
-        # original_image_features = original_image_features / \
-        #     original_image_features.norm(dim=1, keepdim=True)
+        # Normalize
+        original_text_features = original_text_features / \
+            original_text_features.norm(dim=1, keepdim=True)
+        original_image_features = original_image_features / \
+            original_image_features.norm(dim=1, keepdim=True)
 
-        # image_hidden_size = self.image_to_hidden_size(original_image_features)
-        # text_hidden_size = self.text_to_hidden_size(original_text_features)
+        # Reshape
+        bs = original_text_features.shape[0]
+        original_text_features_reshaped = \
+            torch.reshape(original_text_features,
+                          (bs, self.num_patches, self.txt_patch_size))
+        original_image_features_reshaped = \
+            torch.reshape(original_image_features,
+                          (bs, self.num_patches, self.img_patch_size))
 
-        # Do attentions
-        image_self_attention = self.self_attention_image(
-            original_image_features)
+        # Self attention
         text_self_attention = self.self_attention_text(
-            original_text_features)
+            original_text_features_reshaped)
+        img_self_attention = self.self_attention_image(
+            original_image_features_reshaped)
 
-        fc_layers_image = self.huang_image(image_self_attention)
-        fc_layers_text = self.huang_text(text_self_attention)
+        # Cross attention
+        complementary_cross_attention_T_I = self.cross_attention_1(
+            text_self_attention, img_self_attention)
+        complementary_cross_attention_I_T = self.cross_attention_2(
+            img_self_attention, text_self_attention)
 
+        # Flatten
+        complementary_cross_attention_T_I = torch.flatten(
+            complementary_cross_attention_T_I, start_dim=1, end_dim=2)
+        complementary_cross_attention_I_T = torch.flatten(
+            complementary_cross_attention_I_T, start_dim=1, end_dim=2)
+
+        # FC layer to output
         concat_features = torch.cat(
-            (text_self_attention,
-             image_self_attention
-             ), dim=1)
+            (
+                # complementary_cross_attention_T_I,
+                # complementary_cross_attention_I_T
+                original_image_features,
+                original_text_features
+            ), dim=1)
 
-        fc_layers_both = self.huang_both(concat_features)
+        after_dropout = self.drop(concat_features)
 
-        # sentiment_prediction_Y_M = torch.argmax(fc_layers_both, dim=1)
+        # output = self.final(after_dropout)
+        output = self.final_features_only(after_dropout)
 
-        # sentiment_prediction_Y_I = torch.argmax(fc_layers_image, dim=1)
-        # sentiment_prediction_Y_T = torch.argmax(fc_layers_text, dim=1)
-
-        # print("sentiment_prediction_Y_M shape:",
-        #       sentiment_prediction_Y_M.shape)
-        # print("sentiment_prediction_Y_I shape:",
-        #       sentiment_prediction_Y_I.shape)
-        # print("sentiment_prediction_Y_T shape:",
-        #       sentiment_prediction_Y_T.shape)
-
-        # print("fc_layers_both shape:", fc_layers_both.shape)
-        # print("fc_layers_image shape:", fc_layers_image.shape)
-        # print("fc_layers_text shape:", fc_layers_text.shape)
-
-        # print(fc_layers_both)
-        # print(sentiment_prediction_Y_M)
-
-        # sentiment_prediction_Y_M = fc_layers_both.gather(
-        #     1, sentiment_prediction_Y_M.unsqueeze(1))
-
-        # sentiment_prediction_Y_I = fc_layers_image.gather(
-        #     1, sentiment_prediction_Y_I.unsqueeze(1))
-
-        # sentiment_prediction_Y_T = fc_layers_text.gather(
-        #     1, sentiment_prediction_Y_T.unsqueeze(1))
-
-        weights = self.average_output
-
-        output = \
-            (fc_layers_both + fc_layers_image*weights[0] +
-                fc_layers_text*weights[1]) / (1 + weights[0] + weights[1])
-
-        print("output shape:", output.shape)
-
-        # print("my_array = ", my_array)
-
-        # complementary_cross_attention_T_I = self.cross_attention_1(
-        #     text_hidden_size, image_hidden_size)
-        # complementary_cross_attention_I_T = self.cross_attention_2(
-        #     image_hidden_size, text_hidden_size)
-
-        # # Code 1
-        # # Concat attn features
-        # print("Option 1")
-        # concat_features = torch.cat(
-        #     (complementary_cross_attention_I_T,  # 64
-        #      complementary_cross_attention_T_I,  # 64
-        #      image_hidden_size,  # 256
-        #      text_hidden_size,  # 256
-        #      ), dim=1)
-
-        # # Code 2
-        # # Concat attn features
-        # print("Option 2")
-        # concat_features = torch.cat(
-        #     (image_self_attention,  # 64
-        #      text_self_attention,  # 64
-        #      image_hidden_size,  # 256
-        #      text_hidden_size,  # 256
-        #      ), dim=1)
-
-        # Code 3
-        # Concat attn features
-        # print("Option 3")
-        # input_1 = image_self_attention - complementary_cross_attention_I_T
-        # input_2 = text_self_attention - complementary_cross_attention_T_I
-        # concat_features = torch.cat(
-        #     (input_1,  # 64
-        #      input_2,  # 64
-        #      image_hidden_size,  # 256
-        #      text_hidden_size,  # 256
-        #      ), dim=1)
-
-        # # Dropout and final layer to output
-        # x3 = self.MMF_dropout_25_percent(concat_features)
-        # output = self.output_all_features(x3)
         return output
