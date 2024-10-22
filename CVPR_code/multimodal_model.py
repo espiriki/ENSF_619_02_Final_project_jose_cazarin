@@ -239,6 +239,10 @@ class EffV2MediumAndDistilbertGated(torch.nn.Module):
         self.final_features_only = torch.nn.Linear(
             1280+768, n_classes)
         
+        self.final_with_everything = torch.nn.Linear(
+            cross_attention_output_size*self.num_patches*2 +
+            1280+768, n_classes)
+
         self.relu = torch.nn.ReLU()
 
 
@@ -612,14 +616,15 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
             (
                 complementary_cross_attention_T_I,
                 complementary_cross_attention_I_T,
-                # original_image_features,
-                # original_text_features
+                original_image_features,
+                original_text_features
             ), dim=1)
 
         after_dropout = self.drop(concat_features)
 
-        output = self.final(after_dropout)
+        # output = self.final(after_dropout)
         # output = self.final_features_only(after_dropout)
+        output = self.final_with_everything(after_dropout)
 
         output = self.relu(output)
 
