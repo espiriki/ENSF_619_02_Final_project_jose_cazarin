@@ -122,7 +122,7 @@ def run_one_epoch(epoch_num, model, data_loader, len_train_data, hw_device,
             train_optimizer.step()
             train_optimizer.zero_grad()
 
-        print("Batch {} on epoch {}".format(batch_idx, epoch_num))
+        print("Batch {}/{} on epoch {}".format(batch_idx, n_batches, epoch_num))
 
         cpu_loss = loss.cpu()
         cpu_loss = cpu_loss.detach()
@@ -203,14 +203,16 @@ def save_model_weights(model, text_model_name, image_model_name, epoch_num, val_
     Path(os.path.join(BASE_PATH,base)).mkdir(parents=True, exist_ok=True)    
 
     if fine_tuning:
-        filename = "BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_FractionLR_{}_OPT_{}_VAL_ACC_{:.3f}_".format(
+        filename = "BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_FractionLR_{}_OPT_{}_VAL_ACC_{:.5f}".format(
             text_model_name+"_"+image_model_name, epoch_num+1, args.lr, args.reg, args.fraction_lr, opt, val_acc)
 
     else:
 
-        filename = "BEST_model_{}_epoch_{}_LR_{}_Reg_{}_VAL_ACC_{:.3f}_".format(
+        filename = "BEST_model_{}_epoch_{}_LR_{}_Reg_{}_VAL_ACC_{:.5f}_".format(
             text_model_name+"_"+image_model_name, epoch_num+1, args.lr, args.reg, val_acc)
 
+    current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+    filename = filename + current_time
     full_path = os.path.join(BASE_PATH,base,filename)
     full_path = full_path + ".pth"
 
@@ -245,9 +247,9 @@ if __name__ == '__main__':
         print("Please provide dataset path")
         sys.exit(1)        
 
-    # This is to make results predictable between runs
-    torch.manual_seed(42)
-    np.random.seed(42)
+    # # This is to make results predictable between runs
+    # torch.manual_seed(42)
+    # np.random.seed(42)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -360,13 +362,14 @@ if __name__ == '__main__':
     date_time = now.strftime("%m/%d/%Y, %H:%M:%S")
     print("Starting W&B...")
     run = wandb.init(
-        project="Garbage Classification Both - Dataset v2",
+        project="Garbage Classification Both - Dataset v3 - better fusion - comparison",
         config=config,
-        name="Both models: " +
-        str(args.text_model) +
-        str(args.image_model) +
-        " " + str(date_time) +
-        " " + str(args.late_fusion)
+        # name="Both models: " +
+        # str(args.text_model) +
+        # str(args.image_model) +
+        # " " + str(date_time) +
+        # " " + str(args.late_fusion)
+        name="Final runs with distilbert and effnetv2 medium"
     )
     print("Done!")
 
@@ -401,6 +404,7 @@ if __name__ == '__main__':
         A.Resize(width=WIDTH,
                  height=HEIGHT,
                  interpolation=cv2.INTER_LINEAR),
+        A.GaussianBlur(p=prob_augmentations),
         A.VerticalFlip(p=prob_augmentations),
         A.HorizontalFlip(p=prob_augmentations),
         A.RandomBrightnessContrast(p=prob_augmentations),
@@ -413,7 +417,7 @@ if __name__ == '__main__':
                            interpolation=cv2.INTER_LINEAR,
                            border_mode=cv2.BORDER_CONSTANT,
                            value=0, p=prob_augmentations,
-                           scale_limit=0.3),
+                           scale_limit=0.5),
         normalize_transform,
         a_pytorch.transforms.ToTensorV2()
     ])
@@ -510,6 +514,8 @@ if __name__ == '__main__':
     print("Starting training...")
     global_model.to(device)
     max_val_accuracy = 0.0
+    max_img_only_acc = 0.0
+    max_txt_only_acc = 0.0
     best_epoch = 0
     scheduler = ReduceLROnPlateau(optimizer, 'max',factor=0.4,verbose=True)
 
@@ -614,6 +620,12 @@ if __name__ == '__main__':
                                                       mode_config_dict['both'],
                                                       eval_mode)        
 
+        if val_acc_image_only > max_img_only_acc:
+            max_img_only_acc = val_acc_image_only
+
+        if val_acc_text_only > max_txt_only_acc:
+            max_txt_only_acc = val_acc_text_only
+
         wandb.log({'epoch': epoch,
                    'epoch_time_seconds': elapsed_time,
                    'train_loss_avg': train_loss_avg,
@@ -623,6 +635,8 @@ if __name__ == '__main__':
                    'val_accuracy_image_only_history': val_acc_image_only,
                    'val_accuracy_BOTH_history': val_acc_both,
                    'max_val_acc': max_val_accuracy,
+                   'max_img_only_val_acc': max_img_only_acc,
+                   'max_txt_only_val_acc': max_txt_only_acc,
                    'black_val_precision': val_report["black"]["precision"],
                    'blue_val_precision': val_report["blue"]["precision"],
                    'green_val_precision': val_report["green"]["precision"],
@@ -637,6 +651,9 @@ if __name__ == '__main__':
             param.requires_grad = True
         # set all model parameters to train
         for param in global_model.image_model.parameters():
+            param.requires_grad = True
+        # set all model parameters to train
+        for param in global_model.parameters():
             param.requires_grad = True
 
         # update learning rate of optimizer
@@ -752,6 +769,11 @@ if __name__ == '__main__':
                                                       mode_config_dict['both'],
                                                       eval_mode)              
 
+            if val_acc_image_only > max_img_only_acc:
+                max_img_only_acc = val_acc_image_only
+
+            if val_acc_text_only > max_txt_only_acc:
+                max_txt_only_acc = val_acc_text_only
             
             wandb.log({'epoch': epoch,
                        'epoch_time_seconds': elapsed_time,
@@ -762,6 +784,8 @@ if __name__ == '__main__':
                        'val_accuracy_image_only_history': val_acc_image_only,
                        'val_accuracy_BOTH_history': val_acc_both,
                        'max_val_acc': max_val_accuracy,
+                       'max_img_only_val_acc': max_img_only_acc,
+                       'max_txt_only_val_acc': max_txt_only_acc,
                        'black_val_precision': val_report["black"]["precision"],
                        'blue_val_precision': val_report["blue"]["precision"],
                        'green_val_precision': val_report["green"]["precision"],

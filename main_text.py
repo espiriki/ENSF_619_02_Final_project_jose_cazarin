@@ -196,14 +196,16 @@ def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tu
     Path(os.path.join(BASE_PATH,base)).mkdir(parents=True, exist_ok=True)    
 
     if fine_tuning:
-        filename = "BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_FractionLR_{}_OPT_{}_VAL_ACC_{:.3f}_".format(
+        filename = "BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_FractionLR_{}_OPT_{}_VAL_ACC_{:.5f}_".format(
             model_name, epoch_num+1, args.lr, args.reg, args.fraction_lr, opt, val_acc)
 
     else:
 
-        filename = "BEST_model_{}_epoch_{}_LR_{}_Reg_{}_VAL_ACC_{:.3f}_".format(
+        filename = "BEST_model_{}_epoch_{}_LR_{}_Reg_{}_VAL_ACC_{:.5f}_".format(
             model_name, epoch_num+1, args.lr, args.reg, val_acc)
 
+    current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+    filename = filename + current_time
     full_path = os.path.join(BASE_PATH,base,filename)
     full_path = full_path + ".pth"
 
@@ -238,7 +240,7 @@ if __name__ == '__main__':
         print("Please provide dataset path")
         sys.exit(1)        
 
-    torch.manual_seed(42)
+    # torch.manual_seed(42)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -273,8 +275,8 @@ if __name__ == '__main__':
     # 124 442 884 parameters
     elif args.text_model == "gpt2":
         global_model = GPT2(_num_classes)
-        _batch_size = 96
-        _batch_size_FT = 6
+        _batch_size = 18
+        _batch_size_FT = 4
         args.acc_steps = 12
     else:
         print("Invalid Model: {}".format(args.text_model))
@@ -313,7 +315,7 @@ if __name__ == '__main__':
     now = datetime.now(timezone)
     date_time = now.strftime("%m/%d/%Y, %H:%M:%S")
     run = wandb.init(
-        project="Garbage Classification Text - Dataset v2",
+        project="Garbage Classification Text - Dataset v3 - CVPR 2025",
         config=config,
         name="Text model: " + str(args.text_model) + " " + str(date_time))
 
