@@ -68,6 +68,7 @@ class ReverseCrossAttention(torch.nn.Module):
         reversed_weights = (1.0-attn_weights)/(dimension-1)
 
         context_vec = reversed_weights.matmul(values_2)
+        # context_vec = attn_weights.matmul(values_2)
 
         output = context_vec
         output = self.norm(output)
@@ -625,7 +626,5 @@ class EffV2MediumAndDistilbertMMF(EffV2MediumAndDistilbertGated):
         # output = self.final(after_dropout)
         # output = self.final_features_only(after_dropout)
         output = self.final_with_everything(after_dropout)
-
-        output = self.relu(output)
 
         return output

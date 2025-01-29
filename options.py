@@ -48,6 +48,10 @@ def args_parser():
     parser.add_argument('--opt', type=str, default="sgd",
                         help='Optimizer to use')
 
+    parser.add_argument('--base_path',
+                        type=str, default="D:\Mestrado\ENSF_619_02_Final_project_jose_cazarin\BEST_MODELS_CVPR_2025",
+                        help='base_path')
+
     parser.add_argument('--calculate_dataset_stats',
                         action=argparse.BooleanOptionalAction, default=False, help="Calculate the development set stats used for normalization")
     

@@ -188,14 +188,16 @@ def save_model_weights(model, model_name, epoch_num, val_acc, hw_device, fine_tu
     Path(os.path.join(BASE_PATH,base)).mkdir(parents=True, exist_ok=True)    
 
     if fine_tuning:
-        filename = "BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_Opt_{}_FractionLR_{}_VAL_ACC_{:.3f}_".format(
+        filename = "BEST_model_{}_FT_EPOCH_{}_LR_{}_Reg_{}_Opt_{}_FractionLR_{}_VAL_ACC_{:.5f}_".format(
             model_name, epoch_num+1, args.lr, args.reg, opt, args.fraction_lr, val_acc)
 
     else:
 
-        filename = "BEST_model_{}_epoch_{}_LR_{}_Reg_{}_Opt_{}_VAL_ACC_{:.3f}_".format(
+        filename = "BEST_model_{}_epoch_{}_LR_{}_Reg_{}_Opt_{}_VAL_ACC_{:.5f}_".format(
             model_name, epoch_num+1, args.lr, args.reg, opt, val_acc)
 
+    current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+    filename = filename + current_time
     full_path = os.path.join(BASE_PATH,base,filename)
     full_path = full_path + ".pth"
 
@@ -253,7 +255,7 @@ if __name__ == '__main__':
         print("Please provide dataset path")
         sys.exit(1)
 
-    torch.manual_seed(42)
+    # torch.manual_seed(42)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -441,13 +443,7 @@ if __name__ == '__main__':
         A.Resize(width=WIDTH,
                  height=HEIGHT,
                  interpolation=cv2.INTER_LINEAR),
-        # A.ISONoise(p=prob_augmentations),
-        # A.Spatter(p=prob_augmentations),
-        # A.GaussNoise(p=prob_augmentations),
         A.GaussianBlur(p=prob_augmentations),
-        # A.GlassBlur(p=prob_augmentations),
-        # A.MotionBlur(p=prob_augmentations),
-        # A.AdvancedBlur(p=prob_augmentations), 
         A.VerticalFlip(p=prob_augmentations),
         A.HorizontalFlip(p=prob_augmentations), 
         A.RandomBrightnessContrast(p=prob_augmentations),
